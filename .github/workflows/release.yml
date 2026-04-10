@@ -1,0 +1,58 @@
+name: Build and Release
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+          dotnet-quality: 'preview'
+
+      - name: Generate version
+        id: version
+        run: |
+          $count = (git rev-list --count HEAD)
+          $version = "1.0.$count"
+          echo "VERSION=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Publish
+        run: |
+          dotnet publish monitor_desktop.csproj `
+            -c Release `
+            -r win-x64 `
+            --self-contained true `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -o publish/
+
+      - name: Zip output
+        run: |
+          Compress-Archive `
+            -Path publish/* `
+            -DestinationPath "monitor_desktop-v${{ steps.version.outputs.VERSION }}.zip"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "v${{ steps.version.outputs.VERSION }}"
+          name: "Release v${{ steps.version.outputs.VERSION }}"
+          files: "monitor_desktop-v${{ steps.version.outputs.VERSION }}.zip"
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
