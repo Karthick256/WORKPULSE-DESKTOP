@@ -18,6 +18,8 @@ namespace monitor_desktop.Services
         private readonly object _lockObject = new object();
         private bool _isDisposed;
 
+        public bool IsDisposed => _isDisposed;
+
         // Mouse & Keyboard counters
         private int _totalMouseClicks;
         private int _totalMouseMovements;

@@ -59,8 +59,8 @@ namespace monitor_desktop.ViewModels
             _activityTrackingService = new ActivityTrackingService(_apiClient);
             _tokenManager = new TokenManager();
 
-            // Initialize tracker service
-            _trackerService = new ActivityTrackerService(_activityTrackingService, _tokenManager);
+            // Get or create singleton tracker service
+            _trackerService = ServiceLocator.GetTrackerService(_activityTrackingService, _tokenManager);
             _trackerService.StatusChanged += OnTrackerStatusChanged;
 
             SelectedDate = DateTime.Today;
@@ -284,8 +284,12 @@ namespace monitor_desktop.ViewModels
 
                     if (IsCheckedIn && CurrentSession.SessionId.HasValue)
                     {
-                        // Restart tracking if session was active
-                        _trackerService.StartTracking(CurrentSession.SessionId.Value);
+                        // Check if tracker is already running for this session
+                        if (!_trackerService.IsTracking || _trackerService.CurrentSessionId != CurrentSession.SessionId.Value)
+                        {
+                            // Restart tracking if needed
+                            _trackerService.StartTracking(CurrentSession.SessionId.Value);
+                        }
                         StatusMessage = $"Active session since {CurrentSession.CheckInTime.Value:HH:mm:ss} - Tracking active";
                     }
                     else if (IsCheckedIn && CurrentSession.CheckInTime.HasValue)
@@ -335,11 +339,19 @@ namespace monitor_desktop.ViewModels
                     CurrentSession = response.Data;
                     IsCheckedIn = true;
 
-                    // START TRACKING!
+                    // Use existing tracker service (don't create new)
                     if (CurrentSession.SessionId.HasValue)
                     {
+                        // Check if tracker is already tracking a different session
+                        if (_trackerService.IsTracking && _trackerService.CurrentSessionId != CurrentSession.SessionId.Value)
+                        {
+                            // Stop current tracking if different session
+                            _trackerService.StopTracking();
+                        }
+
+                        // Start tracking with the new session
                         _trackerService.StartTracking(CurrentSession.SessionId.Value);
-                        StatusMessage = $"Checked in at {CurrentSession.CheckInTime.Value:HH:mm:ss} - Tracking started (sends every 10 minutes)";
+                        StatusMessage = $"Checked in at {CurrentSession.CheckInTime.Value:HH:mm:ss} - Tracking active";
                     }
                     else
                     {
@@ -351,7 +363,7 @@ namespace monitor_desktop.ViewModels
                     Application.Current?.Dispatcher.Invoke(() =>
                     {
                         MessageBox.Show(
-                            $"Checked in successfully!\n\nWorkstation: {CurrentSession.WorkstationName}\nTime: {CurrentSession.CheckInTime.Value:HH:mm:ss}\n\nActivity tracking has started and will send data every 10 minutes.",
+                            $"Checked in successfully!\n\nWorkstation: {CurrentSession.WorkstationName}\nTime: {CurrentSession.CheckInTime.Value:HH:mm:ss}\n\nActivity tracking is active and will continue until you check out.",
                             "Check-In Success", MessageBoxButton.OK, MessageBoxImage.Information);
                     });
                 }
@@ -391,11 +403,12 @@ namespace monitor_desktop.ViewModels
 
             IsLoading = true;
             StatusMessage = "Checking out...";
-            
+
             try
             {
-                // STOP TRACKING first
+                // STOP TRACKING (this stops the singleton tracker)
                 _trackerService.StopTracking();
+
                 var response = await _attendanceService.CheckOut(CurrentSession.SessionId.Value);
 
                 if (response.Status == 200 && response.Data != null)
@@ -595,8 +608,12 @@ namespace monitor_desktop.ViewModels
 
         public void Dispose()
         {
-            _trackerService?.StopTracking();
-            _trackerService?.Dispose();
+            // Unsubscribe from events but don't dispose the tracker
+            // The tracker will be disposed when the app closes
+            if (_trackerService != null)
+            {
+                _trackerService.StatusChanged -= OnTrackerStatusChanged;
+            }
             StopSessionTimer();
         }
 

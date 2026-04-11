@@ -7,10 +7,12 @@ namespace monitor_desktop
     public partial class App : Application
     {
         private readonly TokenManager _tokenManager;
+
         public App()
         {
             _tokenManager = new TokenManager();
         }
+
         protected override void OnStartup(StartupEventArgs e)
         {
             base.OnStartup(e);
@@ -24,6 +26,13 @@ namespace monitor_desktop
                 var loginWindow = new LoginWindow();
                 loginWindow.Show();
             }
+        }
+
+        protected override void OnExit(ExitEventArgs e)
+        {
+            // Clean up the tracker service when the app closes
+            ServiceLocator.DisposeTrackerService();
+            base.OnExit(e);
         }
     }
 }
