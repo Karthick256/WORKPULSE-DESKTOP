@@ -1,17 +1,14 @@
-﻿using monitor_desktop.Models;
-using monitor_desktop.Models.ActivityMonitoring;
+﻿using monitor_desktop.Models.ActivityMonitoring;
 using monitor_desktop.Models.Enums;
 using monitor_desktop.Services;
 using monitor_desktop.Helpers;
-using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
-using System.Linq;
 using System.Runtime.CompilerServices;
-using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Threading;
+using System.Diagnostics;
 
 namespace monitor_desktop.ViewModels
 {
@@ -59,7 +56,6 @@ namespace monitor_desktop.ViewModels
             _activityTrackingService = new ActivityTrackingService(_apiClient);
             _tokenManager = new TokenManager();
 
-            // Get or create singleton tracker service
             _trackerService = ServiceLocator.GetTrackerService(_activityTrackingService, _tokenManager);
             _trackerService.StatusChanged += OnTrackerStatusChanged;
 
@@ -71,7 +67,6 @@ namespace monitor_desktop.ViewModels
 
             IsAdmin = _tokenManager.CurrentToken?.IsAdmin ?? false;
 
-            // Initialize commands with proper canExecute
             CheckInCommand = new RelayCommand(async _ => await CheckIn(), _ => CanCheckIn);
             CheckOutCommand = new RelayCommand(async _ => await CheckOut(), _ => CanCheckOut);
             RefreshCommand = new RelayCommand(async _ => await RefreshData());
@@ -80,7 +75,6 @@ namespace monitor_desktop.ViewModels
             LoadByRangeCommand = new RelayCommand(async _ => await LoadSessionsByDateRange());
             LoadAdminViewCommand = new RelayCommand(async _ => await LoadAllSessionsByDateRange());
 
-            // Load data asynchronously
             Application.Current?.Dispatcher.BeginInvoke(new Action(async () =>
             {
                 await InitialLoadAsync();
@@ -96,7 +90,6 @@ namespace monitor_desktop.ViewModels
         }
 
         // ── Properties ────────────────────────────────────────────────────────
-
         public AttendanceSessionResponse CurrentSession
         {
             get => _currentSession;
@@ -276,7 +269,6 @@ namespace monitor_desktop.ViewModels
             try
             {
                 var response = await _attendanceService.GetActiveSession();
-
                 if (response.Status == 200 && response.Data != null)
                 {
                     CurrentSession = response.Data;
@@ -284,10 +276,8 @@ namespace monitor_desktop.ViewModels
 
                     if (IsCheckedIn && CurrentSession.SessionId.HasValue)
                     {
-                        // Check if tracker is already running for this session
                         if (!_trackerService.IsTracking || _trackerService.CurrentSessionId != CurrentSession.SessionId.Value)
                         {
-                            // Restart tracking if needed
                             _trackerService.StartTracking(CurrentSession.SessionId.Value);
                         }
                         StatusMessage = $"Active session since {CurrentSession.CheckInTime.Value:HH:mm:ss} - Tracking active";
@@ -339,17 +329,12 @@ namespace monitor_desktop.ViewModels
                     CurrentSession = response.Data;
                     IsCheckedIn = true;
 
-                    // Use existing tracker service (don't create new)
                     if (CurrentSession.SessionId.HasValue)
                     {
-                        // Check if tracker is already tracking a different session
                         if (_trackerService.IsTracking && _trackerService.CurrentSessionId != CurrentSession.SessionId.Value)
                         {
-                            // Stop current tracking if different session
                             _trackerService.StopTracking();
                         }
-
-                        // Start tracking with the new session
                         _trackerService.StartTracking(CurrentSession.SessionId.Value);
                         StatusMessage = $"Checked in at {CurrentSession.CheckInTime.Value:HH:mm:ss} - Tracking active";
                     }
@@ -406,8 +391,11 @@ namespace monitor_desktop.ViewModels
 
             try
             {
-                // STOP TRACKING (this stops the singleton tracker)
-                _trackerService.StopTracking();
+                if (_trackerService.IsTracking)
+                {
+                    await _trackerService.StopTrackingAsync(true);
+                    Debug.WriteLine("Tracking stopped before checkout");
+                }
 
                 var response = await _attendanceService.CheckOut(CurrentSession.SessionId.Value);
 
@@ -572,7 +560,6 @@ namespace monitor_desktop.ViewModels
         }
 
         // ── Timer ─────────────────────────────────────────────────────────────
-
         private void StartSessionTimer()
         {
             StopSessionTimer();
@@ -605,11 +592,8 @@ namespace monitor_desktop.ViewModels
         }
 
         // ── Cleanup ──────────────────────────────────────────────────────────
-
         public void Dispose()
         {
-            // Unsubscribe from events but don't dispose the tracker
-            // The tracker will be disposed when the app closes
             if (_trackerService != null)
             {
                 _trackerService.StatusChanged -= OnTrackerStatusChanged;

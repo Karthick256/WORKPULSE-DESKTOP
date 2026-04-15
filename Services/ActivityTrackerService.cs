@@ -5,6 +5,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows;
 using System.Windows.Automation;
+using Microsoft.Win32;
 
 namespace monitor_desktop.Services
 {
@@ -32,18 +33,21 @@ namespace monitor_desktop.Services
         private bool _isIdle;
         private DateTime _idleStartTime;
         private Timer _idleCheckTimer;
+        private bool _isTrackingPaused;
 
         // Application tracking
         private string _currentAppName;
         private string _currentWindowTitle;
         private DateTime _currentAppStartTime;
         private int _currentAppFocusCount;
+        private bool _isAppTrackingPaused;
 
-        // Browser tracking - Store temp ID for URL linking
+        // Browser tracking
         private bool _isBrowserActive;
         private string _currentBrowserName;
         private DateTime _currentBrowserStartTime;
-        private long? _currentBrowserTempId; // Temporary ID for linking URLs
+        private long? _currentBrowserTempId;
+        private bool _isBrowserTrackingPaused;
 
         // URL tracking
         private string _currentUrl;
@@ -51,6 +55,7 @@ namespace monitor_desktop.Services
         private string _currentUrlDomain;
         private DateTime _currentUrlStartTime;
         private List<PendingUrlVisit> _pendingUrlVisits = new List<PendingUrlVisit>();
+        private bool _isUrlTrackingPaused;
 
         // Mouse/keyboard hooks
         private LowLevelKeyboardProc _keyboardProc;
@@ -60,16 +65,23 @@ namespace monitor_desktop.Services
 
         // Configuration
         private int _idleThresholdSeconds = 120;
+        private bool _isSystemSleeping;
+
+        // Background tracking
+        private System.Threading.Mutex _singleInstanceMutex;
+        private const string MutexName = "Global\\WorkPulse_Tracking_Mutex";
+        private Timer _heartbeatTimer;
+        private bool _isBackgroundWorker;
 
         public event EventHandler<string> StatusChanged;
 
         public bool IsTracking => _isTracking;
         public long CurrentSessionId => _currentSessionId;
+        public bool IsIdle => _isIdle;
 
         private List<string> _debugLogs = new List<string>();
         private readonly object _debugLock = new object();
 
-        // Pending URL visit class
         private class PendingUrlVisit
         {
             public string Url { get; set; }
@@ -88,6 +100,8 @@ namespace monitor_desktop.Services
             _trackingService = trackingService;
             _tokenManager = tokenManager;
             AddDebugLog("ActivityTrackerService initialized");
+            SystemEvents.PowerModeChanged += OnPowerModeChanged;
+            SystemEvents.SessionSwitch += OnSessionSwitch;
         }
 
         private void AddDebugLog(string message)
@@ -124,6 +138,9 @@ namespace monitor_desktop.Services
         [DllImport("user32.dll")]
         private static extern bool GetCursorPos(out Point lpPoint);
 
+        [DllImport("user32.dll")]
+        private static extern uint GetLastInputInfo(ref LASTINPUTINFO plii);
+
         private delegate IntPtr LowLevelKeyboardProc(int nCode, IntPtr wParam, IntPtr lParam);
         private delegate IntPtr LowLevelMouseProc(int nCode, IntPtr wParam, IntPtr lParam);
 
@@ -151,44 +168,117 @@ namespace monitor_desktop.Services
         private const int WM_MBUTTONDOWN = 0x0207;
         private const int WM_MOUSEMOVE = 0x0200;
 
-        #endregion
-
-        #region Hooks
-
-        private IntPtr KeyboardHookCallback(int nCode, IntPtr wParam, IntPtr lParam)
+        [StructLayout(LayoutKind.Sequential)]
+        private struct LASTINPUTINFO
         {
-            if (nCode >= 0 && wParam == (IntPtr)WM_KEYDOWN)
-            {
-                Interlocked.Increment(ref _totalKeystrokes);
-                ResetIdleState();
-            }
-            return CallNextHookEx(_keyboardHookId, nCode, wParam, lParam);
+            public uint cbSize;
+            public uint dwTime;
         }
 
-        private IntPtr MouseHookCallback(int nCode, IntPtr wParam, IntPtr lParam)
+        private static uint GetLastInputTime()
         {
-            if (nCode >= 0)
-            {
-                switch ((int)wParam)
-                {
-                    case WM_LBUTTONDOWN:
-                    case WM_RBUTTONDOWN:
-                    case WM_MBUTTONDOWN:
-                        Interlocked.Increment(ref _totalMouseClicks);
-                        ResetIdleState();
-                        break;
-                    case WM_MOUSEMOVE:
-                        Interlocked.Increment(ref _totalMouseMovements);
-                        ResetIdleState();
-                        break;
-                }
-            }
-            return CallNextHookEx(_mouseHookId, nCode, wParam, lParam);
+            LASTINPUTINFO lii = new LASTINPUTINFO();
+            lii.cbSize = (uint)Marshal.SizeOf(lii);
+            GetLastInputInfo(ref lii);
+            return lii.dwTime;
+        }
+
+        public static uint GetIdleTime()
+        {
+            return (uint)Environment.TickCount - GetLastInputTime();
         }
 
         #endregion
 
-        #region Idle Tracking
+        #region System Event Handlers
+
+        private void OnPowerModeChanged(object sender, PowerModeChangedEventArgs e)
+        {
+            switch (e.Mode)
+            {
+                case PowerModes.Suspend:
+                    _isSystemSleeping = true;
+                    AddDebugLog("System entering sleep mode - pausing tracking");
+                    PauseTrackingForIdle();
+                    break;
+                case PowerModes.Resume:
+                    _isSystemSleeping = false;
+                    AddDebugLog("System resumed from sleep - resuming tracking");
+                    _lastActivityTime = DateTime.Now;
+                    if (_isIdle)
+                    {
+                        ResumeTrackingAfterIdle();
+                    }
+                    break;
+            }
+        }
+
+        private void OnSessionSwitch(object sender, SessionSwitchEventArgs e)
+        {
+            switch (e.Reason)
+            {
+                case SessionSwitchReason.SessionLock:
+                    AddDebugLog("Workstation locked - pausing tracking");
+                    PauseTrackingForIdle();
+                    break;
+                case SessionSwitchReason.SessionUnlock:
+                    AddDebugLog("Workstation unlocked - resuming tracking");
+                    _lastActivityTime = DateTime.Now;
+                    if (_isIdle)
+                    {
+                        ResumeTrackingAfterIdle();
+                    }
+                    break;
+                case SessionSwitchReason.RemoteConnect:
+                    AddDebugLog("Remote desktop connected");
+                    break;
+                case SessionSwitchReason.RemoteDisconnect:
+                    AddDebugLog("Remote desktop disconnected");
+                    break;
+            }
+        }
+
+        #endregion
+
+        #region Idle Tracking with Pause/Resume
+
+        private void PauseTrackingForIdle()
+        {
+            if (!_isTracking || _isTrackingPaused) return;
+
+            _isTrackingPaused = true;
+            _isAppTrackingPaused = true;
+            _isBrowserTrackingPaused = true;
+            _isUrlTrackingPaused = true;
+
+            AddDebugLog("TRACKING PAUSED - No activity will be recorded until idle ends");
+        }
+
+        private void ResumeTrackingAfterIdle()
+        {
+            if (!_isTracking || !_isTrackingPaused) return;
+
+            _isTrackingPaused = false;
+            _isAppTrackingPaused = false;
+            _isBrowserTrackingPaused = false;
+            _isUrlTrackingPaused = false;
+
+            // Reset current tracking times to avoid counting idle duration
+            if (!string.IsNullOrEmpty(_currentAppName))
+            {
+                _currentAppStartTime = DateTime.Now;
+            }
+            if (_isBrowserActive)
+            {
+                _currentBrowserStartTime = DateTime.Now;
+            }
+            if (!string.IsNullOrEmpty(_currentUrl))
+            {
+                _currentUrlStartTime = DateTime.Now;
+            }
+
+            AddDebugLog("TRACKING RESUMED - Activity recording continues");
+        }
 
         private void ResetIdleState()
         {
@@ -206,18 +296,37 @@ namespace monitor_desktop.Services
                 }
 
                 _isIdle = false;
+
+                // Resume tracking after idle
+                ResumeTrackingAfterIdle();
             }
         }
 
         private void CheckIdleState()
         {
-            var idleTime = DateTime.Now - _lastActivityTime;
+            // Use system idle time for more accurate detection (includes screen saver, lock, etc.)
+            uint systemIdleTimeMs = GetIdleTime();
+            double systemIdleSeconds = systemIdleTimeMs / 1000.0;
 
-            if (!_isIdle && idleTime.TotalSeconds >= _idleThresholdSeconds)
+            // Also check our manual tracking
+            var manualIdleTime = DateTime.Now - _lastActivityTime;
+
+            // Use the larger of the two idle times for accuracy
+            double effectiveIdleSeconds = Math.Max(systemIdleSeconds, manualIdleTime.TotalSeconds);
+
+            if (!_isIdle && effectiveIdleSeconds >= _idleThresholdSeconds)
             {
                 _isIdle = true;
                 _idleStartTime = DateTime.Now;
-                AddDebugLog($"Idle started at {_idleStartTime:HH:mm:ss}");
+                AddDebugLog($"Idle started at {_idleStartTime:HH:mm:ss} (System idle: {effectiveIdleSeconds:F0}s)");
+
+                // Pause tracking during idle
+                PauseTrackingForIdle();
+            }
+            else if (_isIdle && effectiveIdleSeconds < _idleThresholdSeconds)
+            {
+                // User became active again
+                ResetIdleState();
             }
         }
 
@@ -255,7 +364,7 @@ namespace monitor_desktop.Services
 
         #endregion
 
-        #region Browser URL Extraction
+        #region Browser URL Extraction (unchanged)
 
         private bool IsBrowserProcess(string processName)
         {
@@ -424,7 +533,7 @@ namespace monitor_desktop.Services
 
         #endregion
 
-        #region Application Tracking
+        #region Application Tracking (with pause support)
 
         private void StartWindowMonitoring()
         {
@@ -453,6 +562,9 @@ namespace monitor_desktop.Services
 
         private void TrackActiveWindow()
         {
+            // Don't track if tracking is paused (idle)
+            if (_isTrackingPaused) return;
+
             try
             {
                 IntPtr handle = GetForegroundWindow();
@@ -492,6 +604,9 @@ namespace monitor_desktop.Services
 
         private void TrackRegularApplication(string processName, string windowTitle)
         {
+            // Don't track app usage during idle pause
+            if (_isAppTrackingPaused) return;
+
             string appKey = $"{processName}|{windowTitle}";
             string currentKey = $"{_currentAppName}|{_currentWindowTitle}";
 
@@ -575,10 +690,13 @@ namespace monitor_desktop.Services
 
         #endregion
 
-        #region Browser Tracking
+        #region Browser Tracking (with pause support)
 
         private async void TrackBrowserActivity(IntPtr handle, string processName, string windowTitle)
         {
+            // Don't track browser during idle pause
+            if (_isBrowserTrackingPaused) return;
+
             string browserName = GetBrowserNameFromProcess(processName);
             string currentUrl = GetBrowserUrl(handle, processName);
 
@@ -596,27 +714,24 @@ namespace monitor_desktop.Services
 
                 if (_isBrowserActive)
                 {
-                    // Save previous browser and its pending URLs
                     await SaveCurrentBrowserAndPendingUrls();
                 }
 
                 _isBrowserActive = true;
                 _currentBrowserName = browserName;
                 _currentBrowserStartTime = DateTime.Now;
-                _currentBrowserTempId = DateTime.Now.Ticks; // Generate temporary ID
+                _currentBrowserTempId = DateTime.Now.Ticks;
                 _pendingUrlVisits.Clear();
 
                 AddDebugLog($"Started tracking browser: {browserName} (Temp ID: {_currentBrowserTempId})");
             }
 
-            // Check if URL changed
-            if (!string.IsNullOrEmpty(currentUrl) && _currentUrl != currentUrl)
+            if (!_isUrlTrackingPaused && !string.IsNullOrEmpty(currentUrl) && _currentUrl != currentUrl)
             {
                 AddDebugLog($"URL changed - New: {domain}");
 
                 if (!string.IsNullOrEmpty(_currentUrl))
                 {
-                    // Save current URL visit
                     var endTime = DateTime.Now;
                     var durationSeconds = (int)(endTime - _currentUrlStartTime).TotalSeconds;
 
@@ -657,7 +772,6 @@ namespace monitor_desktop.Services
 
             if (durationSeconds > 0)
             {
-                // Save browser usage
                 var browserRequest = new BrowserUsageRequest
                 {
                     SessionId = _currentSessionId,
@@ -672,13 +786,11 @@ namespace monitor_desktop.Services
                 await _trackingService.SaveBrowserUsage(browserRequest);
                 AddDebugLog($"✓ Browser saved: {_currentBrowserName}");
             }
-
-            // Save all pending URL visits for this browser
             foreach (var visit in _pendingUrlVisits)
             {
                 var urlRequest = new BrowserUrlVisitRequest
                 {
-                    BrowserUsageId = null, // Let backend handle linking
+                    BrowserUsageId = null,
                     Url = visit.Url,
                     PageTitle = visit.PageTitle,
                     Domain = visit.Domain,
@@ -757,6 +869,9 @@ namespace monitor_desktop.Services
         {
             if (!_isTracking || _currentSessionId == 0) return;
 
+            // Don't send mouse/keyboard data during idle pause
+            if (_isTrackingPaused) return;
+
             int clicks = Interlocked.Exchange(ref _totalMouseClicks, 0);
             int movements = Interlocked.Exchange(ref _totalMouseMovements, 0);
             int keystrokes = Interlocked.Exchange(ref _totalKeystrokes, 0);
@@ -834,6 +949,84 @@ namespace monitor_desktop.Services
 
         #endregion
 
+        #region Hooks
+
+        private IntPtr KeyboardHookCallback(int nCode, IntPtr wParam, IntPtr lParam)
+        {
+            if (nCode >= 0 && wParam == (IntPtr)WM_KEYDOWN)
+            {
+                // Only count keystrokes if not in idle/paused state
+                if (!_isTrackingPaused)
+                {
+                    Interlocked.Increment(ref _totalKeystrokes);
+                }
+                ResetIdleState();
+            }
+            return CallNextHookEx(_keyboardHookId, nCode, wParam, lParam);
+        }
+
+        private IntPtr MouseHookCallback(int nCode, IntPtr wParam, IntPtr lParam)
+        {
+            if (nCode >= 0)
+            {
+                switch ((int)wParam)
+                {
+                    case WM_LBUTTONDOWN:
+                    case WM_RBUTTONDOWN:
+                    case WM_MBUTTONDOWN:
+                        if (!_isTrackingPaused)
+                        {
+                            Interlocked.Increment(ref _totalMouseClicks);
+                        }
+                        ResetIdleState();
+                        break;
+                    case WM_MOUSEMOVE:
+                        if (!_isTrackingPaused)
+                        {
+                            Interlocked.Increment(ref _totalMouseMovements);
+                        }
+                        ResetIdleState();
+                        break;
+                }
+            }
+            return CallNextHookEx(_mouseHookId, nCode, wParam, lParam);
+        }
+
+        #endregion
+
+        #region Background Tracking
+
+        private void StartBackgroundWorker()
+        {
+            _heartbeatTimer = new Timer(HeartbeatCallback, null, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));
+            AddDebugLog("Background heartbeat started - Tracking will continue if app is closed");
+        }
+
+        private void HeartbeatCallback(object state)
+        {
+            if (!_isTracking || _isDisposed) return;
+            AddDebugLog("Background heartbeat - tracking active");
+        }
+
+        public void RunInBackground()
+        {
+            if (_isBackgroundWorker) return;
+
+            _isBackgroundWorker = true;
+            AddDebugLog("Switching to background mode - Tracking continues");
+
+            Task.Run(() =>
+            {
+                while (_isTracking && !_isDisposed)
+                {
+                    Thread.Sleep(1000);
+                    Application.Current?.Dispatcher?.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.Background);
+                }
+            });
+        }
+
+        #endregion
+
         #region Start/Stop
 
         public void StartTracking(long sessionId, int? idleThresholdSeconds = null)
@@ -851,6 +1044,10 @@ namespace monitor_desktop.Services
                 _isTracking = true;
                 _lastActivityTime = DateTime.Now;
                 _isIdle = false;
+                _isTrackingPaused = false;
+                _isAppTrackingPaused = false;
+                _isBrowserTrackingPaused = false;
+                _isUrlTrackingPaused = false;
 
                 _totalMouseClicks = 0;
                 _totalMouseMovements = 0;
@@ -884,7 +1081,8 @@ namespace monitor_desktop.Services
 
             StartWindowMonitoring();
             StartMouseKeyboardTimer();
-            _idleCheckTimer = new Timer(_ => CheckIdleState(), null, 5000, 5000);
+            _idleCheckTimer = new Timer(_ => CheckIdleState(), null, 1000, 1000);
+            StartBackgroundWorker();
 
             AddDebugLog($"✓ Tracking started successfully");
         }
@@ -895,21 +1093,16 @@ namespace monitor_desktop.Services
 
             if (!_isTracking) return;
 
-            if (sendFinalData)
+            if (sendFinalData && !_isTrackingPaused)
             {
-                // Send final application
                 if (!string.IsNullOrEmpty(_currentAppName))
                 {
                     SendApplicationUsageAndReset();
                 }
-
-                // Send final browser and all pending URLs
                 if (_isBrowserActive)
                 {
                     await SaveCurrentBrowserAndPendingUrls();
                 }
-
-                // Send final mouse/keyboard
                 int clicks = Interlocked.Exchange(ref _totalMouseClicks, 0);
                 int movements = Interlocked.Exchange(ref _totalMouseMovements, 0);
                 int keystrokes = Interlocked.Exchange(ref _totalKeystrokes, 0);
@@ -931,6 +1124,8 @@ namespace monitor_desktop.Services
 
             lock (_lockObject)
             {
+                _heartbeatTimer?.Dispose();
+                _heartbeatTimer = null;
                 _mouseKeyboardTimer?.Dispose();
                 _mouseKeyboardTimer = null;
                 _idleCheckTimer?.Dispose();
@@ -948,6 +1143,8 @@ namespace monitor_desktop.Services
                 }
 
                 _isTracking = false;
+                _isTrackingPaused = false;
+                _isBackgroundWorker = false;
             }
 
             AddDebugLog($"✓ Tracking stopped");
@@ -963,6 +1160,8 @@ namespace monitor_desktop.Services
         public void Dispose()
         {
             if (_isDisposed) return;
+            SystemEvents.PowerModeChanged -= OnPowerModeChanged;
+            SystemEvents.SessionSwitch -= OnSessionSwitch;
             _isDisposed = true;
             _ = StopTrackingAsync(true);
             GC.SuppressFinalize(this);
