@@ -18,10 +18,12 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup .NET
+      - name: Setup .NET 10
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
+          dotnet-quality: 'preview'
+
       - name: Generate version
         id: version
         run: |
@@ -34,7 +36,6 @@ jobs:
         id: cert
         shell: pwsh
         run: |
-          # Decode Base64 certificate to PFX file
           $pfxBytes = [System.Convert]::FromBase64String("${{ secrets.PFX_CERTIFICATE_BASE64 }}")
           $certPath = "$env:RUNNER_TEMP\WorkPulse.pfx"
           [System.IO.File]::WriteAllBytes($certPath, $pfxBytes)
@@ -56,29 +57,45 @@ jobs:
       - name: Sign the executable
         shell: pwsh
         run: |
-          # Locate signtool
-          $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Filter "signtool.exe" -Recurse | Select-Object -First 1
+          # Find the CORRECT signtool (x64 version, not ARM64)
+          $signtoolPath = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Filter "signtool.exe" -Recurse | 
+                          Where-Object { $_.FullName -notlike "*arm*" -and $_.FullName -like "*x64*" } |
+                          Sort-Object DirectoryName -Descending |
+                          Select-Object -First 1
           
-          if (-not $signtool) {
-            Write-Host "Installing Windows SDK for signtool..."
-            # Download and install Windows SDK (signing tools only)
+          # If no x64 found, try any non-arm version
+          if (-not $signtoolPath) {
+            $signtoolPath = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Filter "signtool.exe" -Recurse | 
+                            Where-Object { $_.FullName -notlike "*arm*" } |
+                            Sort-Object DirectoryName -Descending |
+                            Select-Object -First 1
+          }
+          
+          if (-not $signtoolPath) {
+            Write-Host "Signtool not found, installing Windows SDK..." -ForegroundColor Yellow
+            
+            # Download and install Windows SDK (x64 version)
             $sdkInstaller = "$env:TEMP\winsdk.exe"
             Invoke-WebRequest -Uri "https://go.microsoft.com/fwlink/p/?linkid=2232521" -OutFile $sdkInstaller
             Start-Process -FilePath $sdkInstaller -ArgumentList "/features OptionId.SigningTools /quiet /norestart" -Wait
             Remove-Item $sdkInstaller -Force
-            $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Filter "signtool.exe" -Recurse | Select-Object -First 1
+            
+            # Find signtool again after installation
+            $signtoolPath = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Filter "signtool.exe" -Recurse | 
+                            Where-Object { $_.FullName -notlike "*arm*" -and $_.FullName -like "*x64*" } |
+                            Select-Object -First 1
           }
           
-          if ($signtool) {
+          if ($signtoolPath) {
             $exePath = "publish\monitor_desktop.exe"
             $certPath = "${{ steps.cert.outputs.CERT_PATH }}"
             $password = "${{ secrets.PFX_CERTIFICATE_PASSWORD }}"
             
-            Write-Host "Signing executable: $exePath"
-            Write-Host "Using certificate: $certPath"
+            Write-Host "Using signtool: $($signtoolPath.FullName)" -ForegroundColor Green
+            Write-Host "Signing executable: $exePath" -ForegroundColor Yellow
             
-            # Sign the executable
-            & $signtool.FullName sign `
+            # Sign the executable with timestamp
+            & $signtoolPath.FullName sign `
               /fd SHA256 `
               /a `
               /f $certPath `
@@ -91,12 +108,14 @@ jobs:
               Write-Host "✅ Executable signed successfully!" -ForegroundColor Green
               
               # Verify signature
-              & $signtool.FullName verify /pa /v $exePath
+              & $signtoolPath.FullName verify /pa /v $exePath
             } else {
               Write-Host "❌ Signing failed with exit code: $LASTEXITCODE" -ForegroundColor Red
+              exit 1
             }
           } else {
             Write-Host "❌ SignTool not found after installation attempt" -ForegroundColor Red
+            exit 1
           }
 
       - name: Zip output
@@ -113,18 +132,22 @@ jobs:
           body: |
             ## WorkPulse Release v${{ steps.version.outputs.VERSION }}
             
-            ### Changes in this release:
-            - Auto-signed executable with code signing certificate
-            - Built with .NET 10.0
-            - Single-file executable for Windows x64
+            ### 🚀 Features
+            - Built with .NET 10
+            - Digitally signed executable
+            - Single-file deployment for Windows x64
             
-            ### Installation:
+            ### 📦 Installation
             1. Download the ZIP file
             2. Extract to any folder
             3. Run `monitor_desktop.exe`
             
-            ### Note:
+            ### ✅ Security
             This executable is digitally signed for your security.
+            
+            ### 🔧 System Requirements
+            - Windows 10/11 (64-bit)
+            - .NET 10 Runtime (included in self-contained package)
           files: "monitor_desktop-v${{ steps.version.outputs.VERSION }}.zip"
           generate_release_notes: true
         env:
