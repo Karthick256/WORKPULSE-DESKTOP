@@ -6,13 +6,10 @@ namespace monitor_desktop.Models.ActivityMonitoring
     {
         [Required]
         public string WorkstationName { get; set; }
-
         [Required]
         public string IpAddress { get; set; }
-
         [Required]
         public string OsInfo { get; set; }
-
         public string MacAddress { get; set; }
     }
 }

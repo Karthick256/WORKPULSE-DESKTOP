@@ -1,4 +1,5 @@
-﻿using monitor_desktop.Models;
+﻿
+using monitor_desktop.Models;
 using monitor_desktop.Models.ActivityMonitoring;
 
 namespace monitor_desktop.Services
@@ -10,23 +11,6 @@ namespace monitor_desktop.Services
         public ActivityTrackingService(ApiClient apiClient)
         {
             _apiClient = apiClient;
-        }
-
-        public async Task<ApiResponse<VoidResponse>> SubmitBatch(ActivityBatchRequest batchRequest)
-        {
-            try
-            {
-                return await _apiClient.PostAsync<VoidResponse>(ApiConfig.TrackingBatch, batchRequest);
-            }
-            catch (Exception ex)
-            {
-                return new ApiResponse<VoidResponse>
-                {
-                    Status = 500,
-                    Message = $"Failed to submit activity batch: {ex.Message}",
-                    Data = null
-                };
-            }
         }
 
         public async Task<ApiResponse<VoidResponse>> SaveApplicationUsage(ApplicationUsageRequest request)
@@ -46,30 +30,20 @@ namespace monitor_desktop.Services
             }
         }
 
-        public async Task<long?> SaveBrowserUsage(BrowserUsageRequest request)
+        public async Task<ApiResponse<VoidResponse>> SaveBrowserUsage(BrowserUsageRequest request)
         {
             try
             {
-                var response = await _apiClient.PostAsync<IdResponse>(ApiConfig.TrackingBrowser, request);
-
-                if (response.Status == 200 || response.Status == 201)
-                {
-                    if (response.Data != null && response.Data.Id > 0)
-                    {
-                        return response.Data.Id;
-                    }
-                    return -DateTime.Now.Ticks;
-                }
-                else
-                {
-                    System.Diagnostics.Debug.WriteLine($"Failed to save browser usage: {response.Message}");
-                    return null;
-                }
+                return await _apiClient.PostAsync<VoidResponse>(ApiConfig.TrackingBrowser, request);
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Failed to save browser usage: {ex.Message}");
-                return null;
+                return new ApiResponse<VoidResponse>
+                {
+                    Status = 500,
+                    Message = $"Failed to save browser usage: {ex.Message}",
+                    Data = null
+                };
             }
         }
 
@@ -140,27 +114,7 @@ namespace monitor_desktop.Services
                 };
             }
         }
-
-        public async Task<ApiResponse<VoidResponse>> CloseIdlePeriod(long sessionId)
-        {
-            try
-            {
-                return await _apiClient.PostAsync<VoidResponse>($"{ApiConfig.TrackingIdleEnd}/{sessionId}", null);
-            }
-            catch (Exception ex)
-            {
-                return new ApiResponse<VoidResponse>
-                {
-                    Status = 500,
-                    Message = $"Failed to close idle period: {ex.Message}",
-                    Data = null
-                };
-            }
-        }
     }
 
-    public class VoidResponse
-    {
-      
-    }
+    public class VoidResponse { }
 }

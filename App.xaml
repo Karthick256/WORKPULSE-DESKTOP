@@ -1,14 +1,6 @@
 ﻿<Application x:Class="monitor_desktop.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:converters="clr-namespace:monitor_desktop.Converters">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <Application.Resources>
-        <converters:StatusToStringConverter x:Key="StatusConverter"/>
-        <converters:StatusToColorConverter x:Key="ColorConverter"/>
-        <converters:SessionStatusColorConverter x:Key="StatusColorConverter"/>
-        <converters:MinutesToStringConverter x:Key="MinutesConverter"/>
-        <converters:ScoreToColorConverter x:Key="ScoreColorConverter"/>
-        <converters:InverseBoolConverter x:Key="InverseBoolConverter"/>
-        <converters:CountToVisibilityConverter x:Key="CountToVisibilityConverter"/>
     </Application.Resources>
 </Application>

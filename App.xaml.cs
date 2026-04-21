@@ -39,13 +39,12 @@ namespace monitor_desktop
 
         protected override void OnExit(ExitEventArgs e)
         {
-            var tracker = ServiceLocator.GetExistingTrackerService();
+            var tracker = ActivityTrackerService.GetExistingInstance();
             if (tracker != null && tracker.IsTracking)
             {
-                tracker.StopTracking();
-                Thread.Sleep(500);
+                tracker.StopTrackingAsync(true).Wait(500);
             }
-            ServiceLocator.DisposeTrackerService();
+            ActivityTrackerService.DisposeInstance();
             _appMutex?.ReleaseMutex();
             _appMutex?.Dispose();
             base.OnExit(e);

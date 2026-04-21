@@ -1,9 +1,7 @@
-﻿using monitor_desktop.Models.AuthManagement;
-using monitor_desktop.Services;
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Runtime.CompilerServices;
-using System.Threading.Tasks;
-using System.Windows;
+using monitor_desktop.Models.AuthManagement;
+using monitor_desktop.Services;
 
 namespace monitor_desktop.ViewModels
 {
@@ -11,6 +9,7 @@ namespace monitor_desktop.ViewModels
     {
         private readonly AuthService _authService;
         private readonly TokenManager _tokenManager;
+        private readonly NavigationService _navigationService;
 
         private string _username;
         private string _password;
@@ -50,14 +49,15 @@ namespace monitor_desktop.ViewModels
 
         public LoginViewModel()
         {
-            var apiClient = new ApiClient();
+            var tokenManager = new TokenManager();
+            var apiClient = new ApiClient(tokenManager);
             _authService = new AuthService(apiClient);
-            _tokenManager = new TokenManager();
+            _tokenManager = tokenManager;
+            _navigationService = new NavigationService();
 
-            // Check for existing session
             if (_tokenManager.IsAuthenticated)
             {
-                NavigateToDashboard();
+                _navigationService.NavigateToDashboard();
             }
         }
 
@@ -86,8 +86,7 @@ namespace monitor_desktop.ViewModels
 
                 if (response.Status == 200 && response.Data != null)
                 {
-                    // Token is already saved in AuthService.SignIn
-                    NavigateToDashboard();
+                    _navigationService.NavigateToDashboard();
                     return true;
                 }
                 else
@@ -97,7 +96,7 @@ namespace monitor_desktop.ViewModels
                     return false;
                 }
             }
-            catch (System.Exception ex)
+            catch (Exception ex)
             {
                 ErrorMessage = $"Login failed: {ex.Message}";
                 HasError = true;
@@ -107,16 +106,6 @@ namespace monitor_desktop.ViewModels
             {
                 IsLoading = false;
             }
-        }
-
-        private void NavigateToDashboard()
-        {
-            Application.Current.Dispatcher.Invoke(() =>
-            {
-                var dashboard = new Views.DashboardWindow();
-                dashboard.Show();
-                Application.Current.Windows[0]?.Close();
-            });
         }
 
         public event PropertyChangedEventHandler PropertyChanged;

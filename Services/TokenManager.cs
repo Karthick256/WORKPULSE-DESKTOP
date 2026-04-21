@@ -1,4 +1,5 @@
-﻿using System.IO;
+﻿using System;
+using System.IO;
 using System.Text.Json;
 using monitor_desktop.Models.AuthManagement;
 
@@ -18,17 +19,12 @@ namespace monitor_desktop.Services
         public void SaveToken(TokenStorage token)
         {
             _currentToken = token;
-
             try
             {
                 var directory = Path.GetDirectoryName(TokenFilePath);
-                if (!Directory.Exists(directory))
-                    Directory.CreateDirectory(directory);
+                if (!Directory.Exists(directory)) Directory.CreateDirectory(directory);
 
-                var json = JsonSerializer.Serialize(token, new JsonSerializerOptions
-                {
-                    WriteIndented = true
-                });
+                var json = JsonSerializer.Serialize(token, new JsonSerializerOptions { WriteIndented = true });
                 File.WriteAllText(TokenFilePath, json);
             }
             catch (Exception ex)
@@ -51,7 +47,6 @@ namespace monitor_desktop.Services
                         ClearToken();
                         return null;
                     }
-
                     return _currentToken;
                 }
             }
@@ -59,7 +54,6 @@ namespace monitor_desktop.Services
             {
                 System.Diagnostics.Debug.WriteLine($"Failed to load token: {ex.Message}");
             }
-
             return null;
         }
 
@@ -68,8 +62,7 @@ namespace monitor_desktop.Services
             _currentToken = null;
             try
             {
-                if (File.Exists(TokenFilePath))
-                    File.Delete(TokenFilePath);
+                if (File.Exists(TokenFilePath)) File.Delete(TokenFilePath);
             }
             catch (Exception ex)
             {

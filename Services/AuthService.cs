@@ -1,4 +1,5 @@
-﻿using monitor_desktop.Models;
+﻿
+using monitor_desktop.Models;
 using monitor_desktop.Models.AuthManagement;
 
 namespace monitor_desktop.Services
@@ -16,7 +17,7 @@ namespace monitor_desktop.Services
 
         public async Task<ApiResponse<JwtResponse>> SignIn(LoginRequest request)
         {
-            var response = await _apiClient.PostAsync<JwtResponse>("auth/signin", request);
+            var response = await _apiClient.PostAsync<JwtResponse>(ApiConfig.AuthSignIn, request);
 
             if (response.Status == 200 && response.Data != null)
             {
@@ -35,28 +36,11 @@ namespace monitor_desktop.Services
             return response;
         }
 
-        public async Task<ApiResponse<object>> ChangePassword(ChangePasswordRequest request)
-        {
-            return await _apiClient.PostAsync<object>("auth/change-password", request);
-        }
-
-        public async Task<ApiResponse<object>> ForgotPassword(ForgotPasswordRequest request)
-        {
-            return await _apiClient.PostAsync<object>("auth/forgot-password", request);
-        }
-
-        public async Task<ApiResponse<object>> ForgotUsername(ForgotUsernameRequest request)
-        {
-            return await _apiClient.PostAsync<object>("auth/forgot-username", request);
-        }
-
         public void Logout()
         {
             _tokenManager.ClearToken();
             _apiClient.ClearAuthToken();
         }
-
-        public TokenStorage GetCurrentToken() => _tokenManager.CurrentToken;
 
         public bool IsAuthenticated => _tokenManager.IsAuthenticated;
     }

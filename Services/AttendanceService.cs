@@ -1,4 +1,5 @@
-﻿using monitor_desktop.Models;
+﻿
+using monitor_desktop.Models;
 using monitor_desktop.Models.ActivityMonitoring;
 using monitor_desktop.Models.Enums;
 
@@ -64,78 +65,12 @@ namespace monitor_desktop.Services
             }
         }
 
-        public async Task<ApiResponse<List<AttendanceSessionResponse>>> GetSessionsByDate(DateTime date)
-        {
-            try
-            {
-                var dateString = date.ToString("yyyy-MM-dd");
-                var response = await _apiClient.GetAsync<List<AttendanceSessionResponse>>(
-                    $"{ApiConfig.AttendanceSessionsByDate}?date={dateString}");
-
-                return response;
-            }
-            catch (Exception ex)
-            {
-                return new ApiResponse<List<AttendanceSessionResponse>>
-                {
-                    Status = 500,
-                    Message = $"Failed to get sessions by date: {ex.Message}",
-                    Data = null
-                };
-            }
-        }
-
-        public async Task<ApiResponse<List<AttendanceSessionResponse>>> GetSessionsByDateRange(DateTime from, DateTime to)
-        {
-            try
-            {
-                var fromString = from.ToString("yyyy-MM-dd");
-                var toString = to.ToString("yyyy-MM-dd");
-                var response = await _apiClient.GetAsync<List<AttendanceSessionResponse>>(
-                    $"{ApiConfig.AttendanceSessionsByRange}?from={fromString}&to={toString}");
-
-                return response;
-            }
-            catch (Exception ex)
-            {
-                return new ApiResponse<List<AttendanceSessionResponse>>
-                {
-                    Status = 500,
-                    Message = $"Failed to get sessions by date range: {ex.Message}",
-                    Data = null
-                };
-            }
-        }
-
-        public async Task<ApiResponse<List<AttendanceSessionResponse>>> GetAllSessionsByDateRange(DateTime from, DateTime to)
-        {
-            try
-            {
-                var fromString = from.ToString("yyyy-MM-dd");
-                var toString = to.ToString("yyyy-MM-dd");
-                var response = await _apiClient.GetAsync<List<AttendanceSessionResponse>>(
-                    $"{ApiConfig.AttendanceAdminSessionsByRange}?from={fromString}&to={toString}");
-
-                return response;
-            }
-            catch (Exception ex)
-            {
-                return new ApiResponse<List<AttendanceSessionResponse>>
-                {
-                    Status = 500,
-                    Message = $"Failed to get all sessions: {ex.Message}",
-                    Data = null
-                };
-            }
-        }
-
         public async Task<bool> HasActiveSession()
         {
             try
             {
                 var response = await GetActiveSession();
-                return response.Status == 200 && response.Data != null &&
-                       response.Data.SessionStatus == SessionStatus.ACTIVE;
+                return response.Status == 200 && response.Data != null && response.Data.SessionStatus == SessionStatus.ACTIVE;
             }
             catch
             {
@@ -152,7 +87,6 @@ namespace monitor_desktop.Services
                 OsInfo = GetOperatingSystemInfo(),
                 MacAddress = GetMacAddress()
             };
-
             return await CheckIn(request);
         }
 
@@ -164,9 +98,7 @@ namespace monitor_desktop.Services
                 foreach (var ip in host.AddressList)
                 {
                     if (ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
-                    {
                         return ip.ToString();
-                    }
                 }
             }
             catch { }
@@ -180,10 +112,7 @@ namespace monitor_desktop.Services
                 var os = Environment.OSVersion;
                 return $"{os.Platform} {os.VersionString}";
             }
-            catch
-            {
-                return "Unknown";
-            }
+            catch { return "Unknown"; }
         }
 
         private string GetMacAddress()

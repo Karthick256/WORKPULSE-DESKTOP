@@ -1,5 +1,4 @@
-﻿using System.Windows;
-using System.Windows.Controls;
+﻿using System.Windows.Controls;
 using monitor_desktop.ViewModels;
 
 namespace monitor_desktop.Views
@@ -14,7 +13,6 @@ namespace monitor_desktop.Views
             _viewModel = new AttendanceViewModel();
             DataContext = _viewModel;
 
-            // Cleanup when unloaded
             this.Unloaded += (s, e) => _viewModel.Dispose();
         }
     }

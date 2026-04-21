@@ -1,4 +1,5 @@
 ﻿using System.Windows;
+using monitor_desktop.Views;
 
 namespace monitor_desktop.Services
 {
@@ -8,7 +9,7 @@ namespace monitor_desktop.Services
         {
             Application.Current.Dispatcher.Invoke(() =>
             {
-                var loginWindow = new Views.LoginWindow();
+                var loginWindow = new LoginWindow();
                 loginWindow.Show();
                 CloseCurrentWindow();
             });
@@ -18,7 +19,7 @@ namespace monitor_desktop.Services
         {
             Application.Current.Dispatcher.Invoke(() =>
             {
-                var dashboard = new Views.DashboardWindow();
+                var dashboard = new DashboardWindow();
                 dashboard.Show();
                 CloseCurrentWindow();
             });

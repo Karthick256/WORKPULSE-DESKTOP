@@ -5,7 +5,7 @@ using monitor_desktop.Services;
 
 namespace monitor_desktop.ViewModels
 {
-    public class DashboardViewModel : INotifyPropertyChanged
+    public class DashboardViewModel : INotifyPropertyChanged, IDisposable
     {
         private readonly TokenManager _tokenManager;
         private string _welcomeMessage;
@@ -61,11 +61,10 @@ namespace monitor_desktop.ViewModels
             var token = _tokenManager.CurrentToken;
             if (token != null)
             {
-                // Extract username from JWT if needed, or load from profile API
-                Username = "User"; // You can load from profile API
+                Username = "Employee";
                 UserRoles = string.Join(", ", token.Roles ?? new System.Collections.Generic.List<string>());
                 IsAdmin = token.IsAdmin;
-                WelcomeMessage = $"Welcome back, {Username}!";
+                WelcomeMessage = $"Welcome back!";
             }
             else
             {
@@ -80,8 +79,14 @@ namespace monitor_desktop.ViewModels
 
         public void Logout()
         {
-            var authService = new AuthService(new ApiClient());
+            var apiClient = new ApiClient(_tokenManager);
+            var authService = new AuthService(apiClient);
             authService.Logout();
+            _timer?.Stop();
+        }
+
+        public void Dispose()
+        {
             _timer?.Stop();
             _timer?.Dispose();
         }
