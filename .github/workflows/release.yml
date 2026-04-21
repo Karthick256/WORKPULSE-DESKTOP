@@ -55,6 +55,7 @@ jobs:
             -o publish/
 
       - name: Sign the executable
+        id: signing
         shell: pwsh
         run: |
           # Find the CORRECT signtool (x64 version, not ARM64)
@@ -63,58 +64,62 @@ jobs:
                           Sort-Object DirectoryName -Descending |
                           Select-Object -First 1
           
-          # If no x64 found, try any non-arm version
           if (-not $signtoolPath) {
-            $signtoolPath = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Filter "signtool.exe" -Recurse | 
-                            Where-Object { $_.FullName -notlike "*arm*" } |
-                            Sort-Object DirectoryName -Descending |
-                            Select-Object -First 1
+            Write-Host "Signtool not found!" -ForegroundColor Red
+            exit 1
           }
           
-          if (-not $signtoolPath) {
-            Write-Host "Signtool not found, installing Windows SDK..." -ForegroundColor Yellow
-            
-            # Download and install Windows SDK (x64 version)
-            $sdkInstaller = "$env:TEMP\winsdk.exe"
-            Invoke-WebRequest -Uri "https://go.microsoft.com/fwlink/p/?linkid=2232521" -OutFile $sdkInstaller
-            Start-Process -FilePath $sdkInstaller -ArgumentList "/features OptionId.SigningTools /quiet /norestart" -Wait
-            Remove-Item $sdkInstaller -Force
-            
-            # Find signtool again after installation
-            $signtoolPath = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Filter "signtool.exe" -Recurse | 
-                            Where-Object { $_.FullName -notlike "*arm*" -and $_.FullName -like "*x64*" } |
-                            Select-Object -First 1
-          }
+          $exePath = "publish\monitor_desktop.exe"
+          $certPath = "${{ steps.cert.outputs.CERT_PATH }}"
+          $password = "${{ secrets.PFX_CERTIFICATE_PASSWORD }}"
           
-          if ($signtoolPath) {
-            $exePath = "publish\monitor_desktop.exe"
-            $certPath = "${{ steps.cert.outputs.CERT_PATH }}"
-            $password = "${{ secrets.PFX_CERTIFICATE_PASSWORD }}"
-            
-            Write-Host "Using signtool: $($signtoolPath.FullName)" -ForegroundColor Green
-            Write-Host "Signing executable: $exePath" -ForegroundColor Yellow
-            
-            # Sign the executable with timestamp
-            & $signtoolPath.FullName sign `
-              /fd SHA256 `
-              /a `
-              /f $certPath `
-              /p $password `
-              /tr http://timestamp.digicert.com `
-              /td SHA256 `
-              $exePath
-            
-            if ($LASTEXITCODE -eq 0) {
-              Write-Host "✅ Executable signed successfully!" -ForegroundColor Green
-              
-              # Verify signature
-              & $signtoolPath.FullName verify /pa /v $exePath
-            } else {
-              Write-Host "❌ Signing failed with exit code: $LASTEXITCODE" -ForegroundColor Red
-              exit 1
-            }
+          Write-Host "Using signtool: $($signtoolPath.FullName)" -ForegroundColor Green
+          Write-Host "Signing executable: $exePath" -ForegroundColor Yellow
+          
+          # Sign the executable with timestamp
+          & $signtoolPath.FullName sign `
+            /fd SHA256 `
+            /a `
+            /f $certPath `
+            /p $password `
+            /tr http://timestamp.digicert.com `
+            /td SHA256 `
+            $exePath
+          
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "✅ Executable signed successfully!" -ForegroundColor Green
+            echo "SIGNED=true" >> $env:GITHUB_OUTPUT
           } else {
-            Write-Host "❌ SignTool not found after installation attempt" -ForegroundColor Red
+            Write-Host "❌ Signing failed with exit code: $LASTEXITCODE" -ForegroundColor Red
+            echo "SIGNED=false" >> $env:GITHUB_OUTPUT
+            exit 1
+          }
+
+      - name: Verify signature (for self-signed cert)
+        if: steps.signing.outputs.SIGNED == 'true'
+        shell: pwsh
+        run: |
+          $exePath = "publish\monitor_desktop.exe"
+          
+          # Check if signature exists (ignore trust warning for self-signed)
+          $signature = Get-AuthenticodeSignature $exePath
+          
+          Write-Host "Signature Status: $($signature.Status)" -ForegroundColor Yellow
+          Write-Host "Signer Certificate: $($signature.SignerCertificate.Subject)" -ForegroundColor Gray
+          
+          if ($signature.SignerCertificate -ne $null) {
+            Write-Host "✅ File is digitally signed" -ForegroundColor Green
+            Write-Host "   Signer: $($signature.SignerCertificate.Subject)" -ForegroundColor Green
+            Write-Host "   Thumbprint: $($signature.SignerCertificate.Thumbprint)" -ForegroundColor Green
+            Write-Host "   Valid From: $($signature.SignerCertificate.NotBefore)" -ForegroundColor Green
+            Write-Host "   Valid To: $($signature.SignerCertificate.NotAfter)" -ForegroundColor Green
+            
+            # Note about self-signed certificates
+            Write-Host "`n⚠️  Note: This is a self-signed certificate." -ForegroundColor Yellow
+            Write-Host "   The executable is signed but Windows will show 'Unknown Publisher'" -ForegroundColor Yellow
+            Write-Host "   For production, use a commercial code signing certificate." -ForegroundColor Yellow
+          } else {
+            Write-Host "❌ File is NOT signed" -ForegroundColor Red
             exit 1
           }
 
@@ -142,12 +147,19 @@ jobs:
             2. Extract to any folder
             3. Run `monitor_desktop.exe`
             
-            ### ✅ Security
-            This executable is digitally signed for your security.
+            ### ⚠️ Security Note
+            This executable is digitally signed with a self-signed certificate.
+            On first run, Windows may show a "Windows protected your PC" warning.
+            
+            **To run the application:**
+            1. Click "More info"
+            2. Click "Run anyway"
+            
+            For production use, we recommend purchasing a commercial code signing certificate.
             
             ### 🔧 System Requirements
             - Windows 10/11 (64-bit)
-            - .NET 10 Runtime (included in self-contained package)
+            - No additional runtime required (self-contained)
           files: "monitor_desktop-v${{ steps.version.outputs.VERSION }}.zip"
           generate_release_notes: true
         env:
