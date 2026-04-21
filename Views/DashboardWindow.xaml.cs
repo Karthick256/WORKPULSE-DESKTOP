@@ -32,10 +32,5 @@ namespace monitor_desktop.Views
             if (e.LeftButton == MouseButtonState.Pressed)
                 DragMove();
         }
-
-        private void CloseButton_Click(object sender, RoutedEventArgs e)
-        {
-            Close();
-        }
     }
 }

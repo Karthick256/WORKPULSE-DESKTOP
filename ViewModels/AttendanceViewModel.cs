@@ -57,12 +57,8 @@ namespace monitor_desktop.ViewModels
                 OnPropertyChanged(nameof(CheckOutButtonText));
                 OnPropertyChanged(nameof(CanCheckIn));
                 OnPropertyChanged(nameof(CanCheckOut));
-
-                // Force command reevaluation
                 (CheckInCommand as RelayCommand)?.RaiseCanExecuteChanged();
                 (CheckOutCommand as RelayCommand)?.RaiseCanExecuteChanged();
-
-                // Also force CommandManager to reevaluate
                 CommandManager.InvalidateRequerySuggested();
 
                 if (_isCheckedIn)
@@ -197,8 +193,6 @@ namespace monitor_desktop.ViewModels
                 if ((response.Status == 200 || response.Status == 201) && response.Data != null)
                 {
                     CurrentSession = response.Data;
-
-                    // CRITICAL: Set IsCheckedIn AFTER CurrentSession is set
                     IsCheckedIn = true;
 
                     if (CurrentSession.SessionId.HasValue)

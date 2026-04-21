@@ -462,26 +462,33 @@ namespace monitor_desktop.Services
         private UrlCategory GetUrlCategory(string domain, string url)
         {
             domain = domain.ToLower();
-
+            if (domain.Contains("linkedin") || domain.Contains("jira") || domain.Contains("confluence") ||
+                domain.Contains("notion") || domain.Contains("drive.google") || domain.Contains("docs.google") ||
+                domain.Contains("sharepoint") || domain.Contains("office"))
+                return UrlCategory.WORK;
+            if (domain.Contains("github") || domain.Contains("gitlab") || domain.Contains("bitbucket") ||
+                domain.Contains("stackoverflow") || domain.Contains("stackexchange"))
+                return UrlCategory.DEVELOPMENT;
+            if (domain.Contains("slack") || domain.Contains("teams") || domain.Contains("zoom") ||
+                domain.Contains("meet") || domain.Contains("web.whatsapp"))
+                return UrlCategory.COMMUNICATION;
+            if (domain.Contains("gmail") || domain.Contains("outlook") || domain.Contains("mail"))
+                return UrlCategory.EMAIL;
+            if (domain.Contains("coursera") || domain.Contains("udemy") || domain.Contains("edx") ||
+                domain.Contains("khanacademy") || domain.Contains("geeksforgeeks"))
+                return UrlCategory.LEARNING;
+            if (domain.Contains("google") || domain.Contains("bing") || domain.Contains("duckduckgo"))
+                return UrlCategory.SEARCH;
+            if (domain.Contains("bbc") || domain.Contains("cnn") || domain.Contains("ndtv") ||
+                domain.Contains("thehindu"))
+                return UrlCategory.NEWS;
+            if (domain.Contains("facebook") || domain.Contains("instagram") || domain.Contains("twitter") ||
+                domain.Contains("snapchat") || domain.Contains("reddit"))
+                return UrlCategory.SOCIAL;
             if (domain.Contains("youtube") || domain.Contains("netflix") || domain.Contains("twitch"))
                 return UrlCategory.ENTERTAINMENT;
-
-            if (domain.Contains("facebook") || domain.Contains("twitter") || domain.Contains("instagram") ||
-                domain.Contains("linkedin") || domain.Contains("reddit"))
-                return UrlCategory.SOCIAL;
-
-            if (domain.Contains("github") || domain.Contains("stackoverflow") || domain.Contains("gitlab"))
-                return UrlCategory.DEVELOPMENT;
-
-            if (domain.Contains("gmail") || domain.Contains("outlook"))
-                return UrlCategory.EMAIL;
-
-            if (domain.Contains("google") || domain.Contains("bing"))
-                return UrlCategory.SEARCH;
-
-            if (domain.Contains("amazon") || domain.Contains("ebay"))
+            if (domain.Contains("amazon") || domain.Contains("ebay") || domain.Contains("flipkart"))
                 return UrlCategory.SHOPPING;
-
             return UrlCategory.OTHER;
         }
 
@@ -640,10 +647,34 @@ namespace monitor_desktop.Services
         private AppCategory GetAppCategory(string appName)
         {
             appName = appName.ToLower();
-            if (appName.Contains("visual studio") || appName.Contains("vscode") || appName.Contains("intellij")) return AppCategory.DEVELOPMENT;
-            if (appName.Contains("excel") || appName.Contains("word") || appName.Contains("powerpoint") || appName.Contains("outlook")) return AppCategory.OFFICE;
-            if (appName.Contains("slack") || appName.Contains("teams") || appName.Contains("discord") || appName.Contains("zoom")) return AppCategory.COMMUNICATION;
-            if (appName.Contains("spotify") || appName.Contains("netflix") || appName.Contains("youtube")) return AppCategory.ENTERTAINMENT;
+            if (appName.Contains("excel") || appName.Contains("word") || appName.Contains("powerpoint") ||
+                appName.Contains("onenote"))
+                return AppCategory.OFFICE;
+            if (appName.Contains("outlook") || appName.Contains("slack") || appName.Contains("teams") ||
+                appName.Contains("zoom") || appName.Contains("skype") || appName.Contains("meet"))
+                return AppCategory.COMMUNICATION;
+            if (appName.Contains("visual studio") || appName.Contains("vscode") || appName.Contains("intellij") ||
+                appName.Contains("eclipse") || appName.Contains("android studio") || appName.Contains("pycharm") ||
+                appName.Contains("webstorm"))
+                return AppCategory.DEVELOPMENT;
+            if (appName.Contains("mysql") || appName.Contains("postgres") || appName.Contains("mongodb") ||
+                appName.Contains("sql server") || appName.Contains("oracle") || appName.Contains("dbeaver"))
+                return AppCategory.DATABASE;
+            if (appName.Contains("photoshop") || appName.Contains("illustrator") || appName.Contains("figma") ||
+                appName.Contains("canva") || appName.Contains("after effects") || appName.Contains("premiere"))
+                return AppCategory.DESIGN;
+            if (appName.Contains("chrome") || appName.Contains("firefox") || appName.Contains("edge") ||
+                appName.Contains("safari") || appName.Contains("opera") || appName.Contains("brave"))
+                return AppCategory.BROWSER;
+            if (appName.Contains("task manager") || appName.Contains("settings") || appName.Contains("control panel") ||
+                appName.Contains("cmd") || appName.Contains("powershell") || appName.Contains("terminal"))
+                return AppCategory.SYSTEM;
+            if (appName.Contains("antivirus") || appName.Contains("windows defender") || appName.Contains("kaspersky") ||
+                appName.Contains("norton") || appName.Contains("mcafee"))
+                return AppCategory.SECURITY;
+            if (appName.Contains("spotify") || appName.Contains("netflix") || appName.Contains("youtube") ||
+                appName.Contains("vlc") || appName.Contains("prime video"))
+                return AppCategory.ENTERTAINMENT;
             return AppCategory.OTHER;
         }
 

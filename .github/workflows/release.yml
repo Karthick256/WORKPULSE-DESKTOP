@@ -18,7 +18,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup .NET 10
+      - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
@@ -30,19 +30,7 @@ jobs:
           $count = (git rev-list --count HEAD)
           $version = "1.0.$count"
           echo "VERSION=$version" >> $env:GITHUB_OUTPUT
-          echo "Version: $version"
-
-      - name: Restore certificate from secret
-        id: cert
-        shell: pwsh
-        run: |
-          $pfxBytes = [System.Convert]::FromBase64String("${{ secrets.PFX_CERTIFICATE_BASE64 }}")
-          $certPath = "$env:RUNNER_TEMP\WorkPulse.pfx"
-          [System.IO.File]::WriteAllBytes($certPath, $pfxBytes)
-          echo "CERT_PATH=$certPath" >> $env:GITHUB_OUTPUT
-          echo "Certificate restored successfully"
-
-      - name: Publish Application
+      - name: Publish
         run: |
           dotnet publish monitor_desktop.csproj `
             -c Release `
@@ -50,126 +38,18 @@ jobs:
             --self-contained true `
             -p:PublishSingleFile=true `
             -p:IncludeNativeLibrariesForSelfExtract=true `
-            -p:DebugType=none `
-            -p:DebugSymbols=false `
             -o publish/
-
-      - name: Sign the executable
-        id: signing
-        shell: pwsh
-        run: |
-          # Find the CORRECT signtool (x64 version, not ARM64)
-          $signtoolPath = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Filter "signtool.exe" -Recurse | 
-                          Where-Object { $_.FullName -notlike "*arm*" -and $_.FullName -like "*x64*" } |
-                          Sort-Object DirectoryName -Descending |
-                          Select-Object -First 1
-          
-          if (-not $signtoolPath) {
-            Write-Host "Signtool not found!" -ForegroundColor Red
-            exit 1
-          }
-          
-          $exePath = "publish\monitor_desktop.exe"
-          $certPath = "${{ steps.cert.outputs.CERT_PATH }}"
-          $password = "${{ secrets.PFX_CERTIFICATE_PASSWORD }}"
-          
-          Write-Host "Using signtool: $($signtoolPath.FullName)" -ForegroundColor Green
-          Write-Host "Signing executable: $exePath" -ForegroundColor Yellow
-          
-          # Sign the executable with timestamp
-          & $signtoolPath.FullName sign `
-            /fd SHA256 `
-            /a `
-            /f $certPath `
-            /p $password `
-            /tr http://timestamp.digicert.com `
-            /td SHA256 `
-            $exePath
-          
-          if ($LASTEXITCODE -eq 0) {
-            Write-Host "✅ Executable signed successfully!" -ForegroundColor Green
-            echo "SIGNED=true" >> $env:GITHUB_OUTPUT
-          } else {
-            Write-Host "❌ Signing failed with exit code: $LASTEXITCODE" -ForegroundColor Red
-            echo "SIGNED=false" >> $env:GITHUB_OUTPUT
-            exit 1
-          }
-
-      - name: Verify signature (for self-signed cert)
-        if: steps.signing.outputs.SIGNED == 'true'
-        shell: pwsh
-        run: |
-          $exePath = "publish\monitor_desktop.exe"
-          
-          # Check if signature exists (ignore trust warning for self-signed)
-          $signature = Get-AuthenticodeSignature $exePath
-          
-          Write-Host "Signature Status: $($signature.Status)" -ForegroundColor Yellow
-          Write-Host "Signer Certificate: $($signature.SignerCertificate.Subject)" -ForegroundColor Gray
-          
-          if ($signature.SignerCertificate -ne $null) {
-            Write-Host "✅ File is digitally signed" -ForegroundColor Green
-            Write-Host "   Signer: $($signature.SignerCertificate.Subject)" -ForegroundColor Green
-            Write-Host "   Thumbprint: $($signature.SignerCertificate.Thumbprint)" -ForegroundColor Green
-            Write-Host "   Valid From: $($signature.SignerCertificate.NotBefore)" -ForegroundColor Green
-            Write-Host "   Valid To: $($signature.SignerCertificate.NotAfter)" -ForegroundColor Green
-            
-            # Note about self-signed certificates
-            Write-Host "`n⚠️  Note: This is a self-signed certificate." -ForegroundColor Yellow
-            Write-Host "   The executable is signed but Windows will show 'Unknown Publisher'" -ForegroundColor Yellow
-            Write-Host "   For production, use a commercial code signing certificate." -ForegroundColor Yellow
-          } else {
-            Write-Host "❌ File is NOT signed" -ForegroundColor Red
-            exit 1
-          }
-
       - name: Zip output
         run: |
           Compress-Archive `
             -Path publish/* `
             -DestinationPath "monitor_desktop-v${{ steps.version.outputs.VERSION }}.zip"
-
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: "v${{ steps.version.outputs.VERSION }}"
           name: "Release v${{ steps.version.outputs.VERSION }}"
-          body: |
-            ## WorkPulse Release v${{ steps.version.outputs.VERSION }}
-            
-            ### 🚀 Features
-            - Built with .NET 10
-            - Digitally signed executable
-            - Single-file deployment for Windows x64
-            
-            ### 📦 Installation
-            1. Download the ZIP file
-            2. Extract to any folder
-            3. Run `monitor_desktop.exe`
-            
-            ### ⚠️ Security Note
-            This executable is digitally signed with a self-signed certificate.
-            On first run, Windows may show a "Windows protected your PC" warning.
-            
-            **To run the application:**
-            1. Click "More info"
-            2. Click "Run anyway"
-            
-            For production use, we recommend purchasing a commercial code signing certificate.
-            
-            ### 🔧 System Requirements
-            - Windows 10/11 (64-bit)
-            - No additional runtime required (self-contained)
           files: "monitor_desktop-v${{ steps.version.outputs.VERSION }}.zip"
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          
-      - name: Clean up certificate
-        if: always()
-        shell: pwsh
-        run: |
-          if (Test-Path "${{ steps.cert.outputs.CERT_PATH }}") {
-            Remove-Item "${{ steps.cert.outputs.CERT_PATH }}" -Force
-            Write-Host "Certificate cleaned up"
-          }
