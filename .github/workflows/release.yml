@@ -22,16 +22,26 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
-          dotnet-quality: 'preview'
-
       - name: Generate version
         id: version
         run: |
           $count = (git rev-list --count HEAD)
           $version = "1.0.$count"
           echo "VERSION=$version" >> $env:GITHUB_OUTPUT
+          echo "Version: $version"
 
-      - name: Publish
+      - name: Restore certificate from secret
+        id: cert
+        shell: pwsh
+        run: |
+          # Decode Base64 certificate to PFX file
+          $pfxBytes = [System.Convert]::FromBase64String("${{ secrets.PFX_CERTIFICATE_BASE64 }}")
+          $certPath = "$env:RUNNER_TEMP\WorkPulse.pfx"
+          [System.IO.File]::WriteAllBytes($certPath, $pfxBytes)
+          echo "CERT_PATH=$certPath" >> $env:GITHUB_OUTPUT
+          echo "Certificate restored successfully"
+
+      - name: Publish Application
         run: |
           dotnet publish monitor_desktop.csproj `
             -c Release `
@@ -39,7 +49,55 @@ jobs:
             --self-contained true `
             -p:PublishSingleFile=true `
             -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:DebugType=none `
+            -p:DebugSymbols=false `
             -o publish/
+
+      - name: Sign the executable
+        shell: pwsh
+        run: |
+          # Locate signtool
+          $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Filter "signtool.exe" -Recurse | Select-Object -First 1
+          
+          if (-not $signtool) {
+            Write-Host "Installing Windows SDK for signtool..."
+            # Download and install Windows SDK (signing tools only)
+            $sdkInstaller = "$env:TEMP\winsdk.exe"
+            Invoke-WebRequest -Uri "https://go.microsoft.com/fwlink/p/?linkid=2232521" -OutFile $sdkInstaller
+            Start-Process -FilePath $sdkInstaller -ArgumentList "/features OptionId.SigningTools /quiet /norestart" -Wait
+            Remove-Item $sdkInstaller -Force
+            $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Filter "signtool.exe" -Recurse | Select-Object -First 1
+          }
+          
+          if ($signtool) {
+            $exePath = "publish\monitor_desktop.exe"
+            $certPath = "${{ steps.cert.outputs.CERT_PATH }}"
+            $password = "${{ secrets.PFX_CERTIFICATE_PASSWORD }}"
+            
+            Write-Host "Signing executable: $exePath"
+            Write-Host "Using certificate: $certPath"
+            
+            # Sign the executable
+            & $signtool.FullName sign `
+              /fd SHA256 `
+              /a `
+              /f $certPath `
+              /p $password `
+              /tr http://timestamp.digicert.com `
+              /td SHA256 `
+              $exePath
+            
+            if ($LASTEXITCODE -eq 0) {
+              Write-Host "✅ Executable signed successfully!" -ForegroundColor Green
+              
+              # Verify signature
+              & $signtool.FullName verify /pa /v $exePath
+            } else {
+              Write-Host "❌ Signing failed with exit code: $LASTEXITCODE" -ForegroundColor Red
+            }
+          } else {
+            Write-Host "❌ SignTool not found after installation attempt" -ForegroundColor Red
+          }
 
       - name: Zip output
         run: |
@@ -52,7 +110,31 @@ jobs:
         with:
           tag_name: "v${{ steps.version.outputs.VERSION }}"
           name: "Release v${{ steps.version.outputs.VERSION }}"
+          body: |
+            ## WorkPulse Release v${{ steps.version.outputs.VERSION }}
+            
+            ### Changes in this release:
+            - Auto-signed executable with code signing certificate
+            - Built with .NET 10.0
+            - Single-file executable for Windows x64
+            
+            ### Installation:
+            1. Download the ZIP file
+            2. Extract to any folder
+            3. Run `monitor_desktop.exe`
+            
+            ### Note:
+            This executable is digitally signed for your security.
           files: "monitor_desktop-v${{ steps.version.outputs.VERSION }}.zip"
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Clean up certificate
+        if: always()
+        shell: pwsh
+        run: |
+          if (Test-Path "${{ steps.cert.outputs.CERT_PATH }}") {
+            Remove-Item "${{ steps.cert.outputs.CERT_PATH }}" -Force
+            Write-Host "Certificate cleaned up"
+          }
