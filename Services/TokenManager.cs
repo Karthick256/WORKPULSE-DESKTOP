@@ -1,6 +1,7 @@
-﻿using System.IO;
+﻿using monitor_desktop.Models.AuthManagement;
+using System.Diagnostics;
+using System.IO;
 using System.Text.Json;
-using monitor_desktop.Models.AuthManagement;
 
 namespace monitor_desktop.Services
 {
@@ -28,7 +29,7 @@ namespace monitor_desktop.Services
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Failed to save token: {ex.Message}");
+                Debug.WriteLine($"Failed to save token: {ex.Message}");
             }
         }
 
@@ -51,7 +52,7 @@ namespace monitor_desktop.Services
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Failed to load token: {ex.Message}");
+                Debug.WriteLine($"Failed to load token: {ex.Message}");
             }
             return null;
         }
@@ -65,7 +66,7 @@ namespace monitor_desktop.Services
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Failed to clear token: {ex.Message}");
+                Debug.WriteLine($"Failed to clear token: {ex.Message}");
             }
         }
 

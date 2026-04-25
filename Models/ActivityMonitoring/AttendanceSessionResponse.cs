@@ -1,5 +1,4 @@
-﻿using System;
-using monitor_desktop.Models.Enums;
+﻿using monitor_desktop.Models.Enums;
 
 namespace monitor_desktop.Models.ActivityMonitoring
 {

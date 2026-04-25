@@ -1,13 +1,10 @@
-﻿using System;
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
 using System.Reflection;
 using System.Runtime.CompilerServices;
-using System.Threading.Tasks;
 using System.Windows;
-using System.Windows.Threading;
 using monitor_desktop.Services;
 
 namespace monitor_desktop.Views
@@ -73,7 +70,7 @@ namespace monitor_desktop.Views
 
             if (_updateInfo.LatestVersion.IsMandatory)
             {
-                SkipButton.Visibility = Visibility.Collapsed;
+                
                 Title = "Mandatory Update Required";
                 StatusMessage = "This is a mandatory update. The application will update automatically.";
             }
@@ -84,7 +81,7 @@ namespace monitor_desktop.Views
             IsDownloading = true;
             CanClose = false;
             InstallButton.IsEnabled = false;
-            SkipButton.IsEnabled = false;
+            
             RemindLaterButton.IsEnabled = false;
 
             var progress = new Progress<int>(p =>
@@ -122,7 +119,7 @@ namespace monitor_desktop.Views
                     InstallButton.IsEnabled = true;
                     if (!_updateInfo.LatestVersion.IsMandatory)
                     {
-                        SkipButton.IsEnabled = true;
+                        
                         RemindLaterButton.IsEnabled = true;
                     }
                 }
@@ -135,7 +132,7 @@ namespace monitor_desktop.Views
                 InstallButton.IsEnabled = true;
                 if (!_updateInfo.LatestVersion.IsMandatory)
                 {
-                    SkipButton.IsEnabled = true;
+                    
                     RemindLaterButton.IsEnabled = true;
                 }
             }

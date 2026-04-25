@@ -31,18 +31,13 @@ namespace monitor_desktop.Services
             }
         }
 
-        // Updated CheckOut with time parameter
         public async Task<ApiResponse<AttendanceSessionResponse>> CheckOut(long sessionId, DateTime checkOutTime)
         {
             try
             {
-                // With milliseconds: 2026-04-25T13:35:42.123
                 var formattedTime = checkOutTime.ToString("yyyy-MM-ddTHH:mm:ss.fff", System.Globalization.CultureInfo.InvariantCulture);
-
                 var url = $"{ApiConfig.AttendanceCheckOut}/{sessionId}?checkOutTime={Uri.EscapeDataString(formattedTime)}";
-
                 Debug.WriteLine($"Checkout URL: {url}");
-
                 return await _apiClient.PostAsync<AttendanceSessionResponse>(url, null);
             }
             catch (Exception ex)
@@ -94,7 +89,7 @@ namespace monitor_desktop.Services
                 IpAddress = GetLocalIpAddress(),
                 OsInfo = GetOperatingSystemInfo(),
                 MacAddress = GetMacAddress(),
-                CheckInTime = DateTime.Now  // Client provides current time
+                CheckInTime = DateTime.Now
             };
             return await CheckIn(request);
         }

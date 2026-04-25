@@ -1,11 +1,8 @@
-﻿using System;
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
 using System.Reflection;
 using System.Text.Json;
-using System.Threading.Tasks;
-using System.Windows;
 
 namespace monitor_desktop.Services
 {
@@ -44,20 +41,15 @@ namespace monitor_desktop.Services
 
         private readonly HttpClient _httpClient;
 
-        // GitHub repository info - Update these!
-        private const string GITHUB_OWNER = "your-username";  // Change this
-        private const string GITHUB_REPO = "your-repo";       // Change this
+        private const string GITHUB_OWNER = "Karthick256";
+        private const string GITHUB_REPO = "WORKPULSE-DESKTOP";
         private const string GITHUB_API_URL = $"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/releases/latest";
-
-        // Or use a custom endpoint if you prefer
-        private const string UPDATE_CHECK_URL = "https://api.github.com/repos/YOUR_USERNAME/YOUR_REPO/releases/latest";
 
         public VersionManager()
         {
             _httpClient = new HttpClient();
             _httpClient.DefaultRequestHeaders.Add("User-Agent", "WorkPulse-AutoUpdater");
 
-            // Create directories if they don't exist
             if (!Directory.Exists(UpdateFolder))
                 Directory.CreateDirectory(UpdateFolder);
             if (!Directory.Exists(BackupFolder))
@@ -69,7 +61,6 @@ namespace monitor_desktop.Services
             var assembly = Assembly.GetExecutingAssembly();
             var fileVersionInfo = FileVersionInfo.GetVersionInfo(assembly.Location);
 
-            // Try to get from version file first (for updated apps)
             if (File.Exists(VersionFilePath))
             {
                 try
@@ -84,7 +75,6 @@ namespace monitor_desktop.Services
                 catch { }
             }
 
-            // Fallback to assembly version
             return new Version(fileVersionInfo.FileVersion ?? "1.0.0");
         }
 
@@ -93,13 +83,10 @@ namespace monitor_desktop.Services
             try
             {
                 var currentVersion = GetCurrentVersion();
-                Debug.WriteLine($"Current version: {currentVersion}");
-
                 var response = await _httpClient.GetAsync(GITHUB_API_URL);
 
                 if (!response.IsSuccessStatusCode)
                 {
-                    Debug.WriteLine($"GitHub API error: {response.StatusCode}");
                     return new UpdateInfo { HasUpdate = false };
                 }
 
@@ -113,7 +100,6 @@ namespace monitor_desktop.Services
                 var releaseNotes = root.GetProperty("body").GetString();
                 var releaseDate = root.GetProperty("published_at").GetDateTime();
 
-                // Check if assets contain the zip file
                 var assets = root.GetProperty("assets");
                 string downloadUrl = null;
                 foreach (var asset in assets.EnumerateArray())
@@ -127,8 +113,6 @@ namespace monitor_desktop.Services
                 }
 
                 var hasUpdate = latestVersion > currentVersion;
-
-                Debug.WriteLine($"Latest version: {latestVersion}, Has update: {hasUpdate}");
 
                 return new UpdateInfo
                 {
@@ -160,7 +144,6 @@ namespace monitor_desktop.Services
 
         private Version ParseVersionFromTag(string tag)
         {
-            // Remove 'v' prefix if present (e.g., "v1.0.5" -> "1.0.5")
             if (tag.StartsWith("v"))
                 tag = tag.Substring(1);
 
@@ -172,7 +155,6 @@ namespace monitor_desktop.Services
 
         private bool IsMajorUpdate(Version current, Version latest)
         {
-            // If major version changed or minor version increased by more than 1
             return current.Major < latest.Major ||
                    (current.Major == latest.Major && latest.Minor - current.Minor >= 2);
         }
@@ -186,15 +168,10 @@ namespace monitor_desktop.Services
 
                 var zipPath = Path.Combine(UpdateFolder, $"update_{updateInfo.Version}.zip");
                 var extractPath = Path.Combine(UpdateFolder, $"extracted_{updateInfo.Version}");
-
-                // Clean up old extraction folder
                 if (Directory.Exists(extractPath))
                     Directory.Delete(extractPath, true);
                 Directory.CreateDirectory(extractPath);
-
-                // Download the zip file
                 progress?.Report(10);
-                Debug.WriteLine($"Downloading update from: {updateInfo.ReleaseUrl}");
 
                 using (var response = await _httpClient.GetAsync(updateInfo.ReleaseUrl, HttpCompletionOption.ResponseHeadersRead))
                 {
@@ -223,31 +200,19 @@ namespace monitor_desktop.Services
                 }
 
                 progress?.Report(90);
-                Debug.WriteLine($"Download complete: {zipPath}");
-
-                // Extract the zip file
                 await Task.Run(() => System.IO.Compression.ZipFile.ExtractToDirectory(zipPath, extractPath, true));
                 progress?.Report(95);
-                Debug.WriteLine($"Extraction complete: {extractPath}");
 
-                // Create backup of current installation
                 var currentExePath = Assembly.GetExecutingAssembly().Location;
                 var appDirectory = Path.GetDirectoryName(currentExePath);
                 var backupPath = Path.Combine(BackupFolder, $"backup_{DateTime.Now:yyyyMMdd_HHmmss}");
 
                 await Task.Run(() => CopyDirectory(appDirectory, backupPath));
                 progress?.Report(98);
-                Debug.WriteLine($"Backup created: {backupPath}");
-
-                // Replace files
                 await Task.Run(() => ReplaceApplicationFiles(extractPath, appDirectory));
                 progress?.Report(100);
-                Debug.WriteLine($"Files replaced successfully");
 
-                // Save the new version info
                 SaveVersionInfo(updateInfo.Version);
-
-                // Clean up
                 File.Delete(zipPath);
                 Directory.Delete(extractPath, true);
 
@@ -262,7 +227,6 @@ namespace monitor_desktop.Services
 
         private void ReplaceApplicationFiles(string sourceDir, string targetDir)
         {
-            // Skip the updater itself if it's running
             var currentExe = Assembly.GetExecutingAssembly().Location;
             var currentExeName = Path.GetFileName(currentExe);
 
@@ -271,7 +235,6 @@ namespace monitor_desktop.Services
                 var fileName = Path.GetFileName(sourceFile);
                 var targetFile = Path.Combine(targetDir, fileName);
 
-                // Skip copying the currently running executable
                 if (fileName.Equals(currentExeName, StringComparison.OrdinalIgnoreCase))
                     continue;
 
@@ -285,7 +248,6 @@ namespace monitor_desktop.Services
                 }
             }
 
-            // Also copy subdirectories
             foreach (var sourceSubDir in Directory.GetDirectories(sourceDir))
             {
                 var dirName = Path.GetFileName(sourceSubDir);
@@ -312,7 +274,6 @@ namespace monitor_desktop.Services
 
             foreach (var directory in Directory.GetDirectories(sourceDir))
             {
-                var dirName = Path.GetDirectoryName(directory);
                 var targetSubDir = Path.Combine(targetDir, Path.GetFileName(directory));
                 CopyDirectory(directory, targetSubDir);
             }
@@ -346,7 +307,6 @@ namespace monitor_desktop.Services
                     Directory.Delete(dir, true);
                 }
 
-                // Keep only last 3 backups
                 var backups = Directory.GetDirectories(BackupFolder, "backup_*")
                     .OrderByDescending(d => d)
                     .Skip(3);
@@ -374,7 +334,6 @@ namespace monitor_desktop.Services
 
                 var currentExePath = Assembly.GetExecutingAssembly().Location;
                 var appDirectory = Path.GetDirectoryName(currentExePath);
-
                 CopyDirectory(latestBackup, appDirectory);
                 return true;
             }

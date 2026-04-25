@@ -63,7 +63,6 @@
             </Setter>
         </Style>
 
-        <!-- Window Control Buttons Style -->
         <Style x:Key="WindowControlButton" TargetType="Button">
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
@@ -121,7 +120,6 @@
                 <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
 
-            <!-- Title Bar -->
             <Border Grid.Row="0" BorderBrush="{StaticResource DividerColor}" BorderThickness="0,0,0,1" MouseLeftButtonDown="TitleBar_MouseDown" Background="Transparent">
                 <Grid Margin="24,0,16,0">
                     <Grid.ColumnDefinitions>
@@ -130,22 +128,18 @@
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
 
-                    <!-- Window Controls (Left side) -->
                     <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
                         <Button x:Name="MinimizeButton" Content="─" Style="{StaticResource WindowControlButton}" Click="MinimizeButton_Click" Margin="0,0,4,0"/>
                         <Button x:Name="MaximizeButton" Content="□" Style="{StaticResource WindowControlButton}" Click="MaximizeButton_Click" Margin="0,0,4,0"/>
                         <Button x:Name="CloseButton" Content="✕" Style="{StaticResource CloseWindowButton}" Click="CloseButton_Click"/>
                     </StackPanel>
 
-                    <!-- App Title -->
                     <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="120,0,0,0">
                         <TextBlock Text="WorkPulse" FontSize="15" FontWeight="Bold" Foreground="{StaticResource TextDark}" VerticalAlignment="Center"/>
                     </StackPanel>
 
-                    <!-- Center: Current Time -->
                     <TextBlock Grid.Column="1" Text="{Binding CurrentTime}" FontSize="13" Foreground="{StaticResource TextSub}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
 
-                    <!-- Right Side: User Info & Actions -->
                     <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                         <Button Content="Check for Updates" Click="CheckForUpdates_Click"
                                 FontSize="12" Padding="12,6" Margin="0,0,10,0"
@@ -157,7 +151,6 @@
                 </Grid>
             </Border>
 
-            <!-- Main Content -->
             <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Background="Transparent">
                 <StackPanel Margin="24,20,24,24">
                     <Border Style="{StaticResource CardStyle}" Padding="0">

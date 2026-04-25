@@ -1,5 +1,4 @@
-﻿
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Windows;
@@ -258,16 +257,10 @@ namespace monitor_desktop.ViewModels
                 if (_trackerService.IsTracking)
                 {
                     await _trackerService.StopTrackingAsync(true);
-                    Debug.WriteLine("Tracking stopped before checkout");
                 }
 
-                // Try with time parameter first
                 var checkOutTime = DateTime.Now;
-                Debug.WriteLine($"Attempting checkout at: {checkOutTime:yyyy-MM-dd HH:mm:ss}");
-
                 var response = await _attendanceService.CheckOut(CurrentSession.SessionId.Value, checkOutTime);
-
-               
 
                 if (response.Status == 200 && response.Data != null)
                 {
@@ -278,12 +271,12 @@ namespace monitor_desktop.ViewModels
                     var mins = CurrentSession.TotalSessionMinutes ?? 0;
                     var duration = mins >= 60 ? $"{mins / 60}h {mins % 60}m" : $"{mins}m";
                     var productivity = CurrentSession.ProductivityScore ?? 0;
-                    StatusMessage = $"Checked out. Duration: {duration}, Productivity: {productivity}% - Tracking stopped";
+                    StatusMessage = $"Checked out. Duration: {duration} - Tracking stopped";
 
                     Application.Current?.Dispatcher.Invoke(() =>
                     {
                         MessageBox.Show(
-                            $"Checked out successfully!\n\nDuration: {duration}\nProductivity: {productivity}%",
+                            $"Checked out successfully!\n\nDuration: {duration}",
                             "Check-Out Success", MessageBoxButton.OK, MessageBoxImage.Information);
                     });
                 }
@@ -301,7 +294,6 @@ namespace monitor_desktop.ViewModels
             {
                 StatusMessage = $"Check-out error: {ex.Message}";
                 Debug.WriteLine($"CheckOut Error: {ex.Message}");
-                Debug.WriteLine($"CheckOut StackTrace: {ex.StackTrace}");
                 Application.Current?.Dispatcher.Invoke(() =>
                 {
                     MessageBox.Show(StatusMessage, "Check-Out Error", MessageBoxButton.OK, MessageBoxImage.Error);

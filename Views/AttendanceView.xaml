@@ -96,7 +96,6 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- Status Bar -->
         <Border Grid.Row="0" Background="#EFF6FF" CornerRadius="10" Padding="12,10" Margin="0,0,0,16" BorderBrush="#E2E8F0" BorderThickness="1">
             <StackPanel Orientation="Horizontal">
                 <TextBlock Text="ℹ" FontSize="14" Foreground="#2563EB" VerticalAlignment="Center"/>
@@ -104,10 +103,8 @@
             </StackPanel>
         </Border>
 
-        <!-- Current Session Card (Centered) -->
         <Border Grid.Row="1" Style="{StaticResource CardStyle}" Padding="30" HorizontalAlignment="Center" Width="400">
             <StackPanel>
-                <!-- Icon -->
                 <Border Width="60" Height="60" CornerRadius="16" HorizontalAlignment="Center" Margin="0,0,0,16">
                     <Border.Background>
                         <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
@@ -121,12 +118,10 @@
                     <TextBlock Text="&#xE77B;" FontFamily="Segoe MDL2 Assets" FontSize="24" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                 </Border>
 
-                <!-- Title -->
                 <TextBlock Text="Current Session" FontSize="16" FontWeight="Bold" Foreground="{StaticResource TextDark}" HorizontalAlignment="Center" Margin="0,0,0,16"/>
 
-                <!-- Status Badge -->
                 <Border CornerRadius="20" Padding="10,5" Margin="0,0,0,20" HorizontalAlignment="Center" Background="{StaticResource InputBg}">
-                    <TextBlock Text="{Binding IsCheckedIn, ConverterParameter='● ACTIVE|● INACTIVE'}" FontSize="11" FontWeight="Bold" HorizontalAlignment="Center">
+                    <TextBlock FontSize="11" FontWeight="Bold" HorizontalAlignment="Center">
                         <TextBlock.Style>
                             <Style TargetType="TextBlock">
                                 <Setter Property="Text" Value="● INACTIVE"/>
@@ -142,7 +137,6 @@
                     </TextBlock>
                 </Border>
 
-                <!-- Session Details -->
                 <StackPanel Margin="0,0,0,20">
                     <Grid Margin="0,0,0,10">
                         <Grid.ColumnDefinitions>
@@ -181,18 +175,8 @@
                     </Grid>
                 </StackPanel>
 
-                <Button Content="{Binding CheckInButtonText}" 
-        Command="{Binding CheckInCommand}" 
-        Style="{StaticResource SuccessButton}" 
-        IsEnabled="{Binding CanCheckIn}" 
-        Margin="0,0,0,10"/>
-
-                <Button Content="{Binding CheckOutButtonText}" 
-        Command="{Binding CheckOutCommand}" 
-        Style="{StaticResource DangerButton}" 
-        IsEnabled="{Binding CanCheckOut}" 
-        Margin="0,0,0,10"/>
-
+                <Button Content="{Binding CheckInButtonText}" Command="{Binding CheckInCommand}" Style="{StaticResource SuccessButton}" IsEnabled="{Binding CanCheckIn}" Margin="0,0,0,10"/>
+                <Button Content="{Binding CheckOutButtonText}" Command="{Binding CheckOutCommand}" Style="{StaticResource DangerButton}" IsEnabled="{Binding CanCheckOut}" Margin="0,0,0,10"/>
                 <ProgressBar IsIndeterminate="True" Visibility="{Binding IsLoading, Converter={StaticResource BoolToVis}}" Foreground="{StaticResource AccentBlue}" Background="Transparent" Height="2" Margin="0,16,0,0"/>
             </StackPanel>
         </Border>

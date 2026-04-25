@@ -1,5 +1,4 @@
-﻿using System;
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 
 namespace monitor_desktop.Models.ActivityMonitoring
 {
@@ -7,16 +6,12 @@ namespace monitor_desktop.Models.ActivityMonitoring
     {
         [Required]
         public string WorkstationName { get; set; }
-
         [Required]
         public string IpAddress { get; set; }
-
         [Required]
         public string OsInfo { get; set; }
-
         public string MacAddress { get; set; }
-
         [Required]
-        public DateTime CheckInTime { get; set; }  // NEW: Client provides check-in time
+        public DateTime CheckInTime { get; set; }
     }
 }

@@ -1,5 +1,4 @@
-﻿
-using monitor_desktop.Converters;
+﻿using monitor_desktop.Converters;
 using monitor_desktop.Models;
 using System.Diagnostics;
 using System.Net.Http;
@@ -96,8 +95,6 @@ namespace monitor_desktop.Services
         private async Task<ApiResponse<T>> HandleResponse<T>(HttpResponseMessage response)
         {
             var content = await response.Content.ReadAsStringAsync();
-
-            // Log the raw response for debugging
             Debug.WriteLine($"Response Status: {response.StatusCode}");
             Debug.WriteLine($"Response Content: {content}");
 
@@ -105,7 +102,6 @@ namespace monitor_desktop.Services
             {
                 if (!string.IsNullOrEmpty(content))
                 {
-                    // Try to deserialize as ApiResponse<T>
                     var backendResponse = JsonSerializer.Deserialize<ApiResponse<T>>(content, _jsonOptions);
                     if (backendResponse != null)
                     {
@@ -116,8 +112,6 @@ namespace monitor_desktop.Services
                             Data = backendResponse.Data
                         };
                     }
-
-                    // If that fails, try to deserialize as just T
                     var directData = JsonSerializer.Deserialize<T>(content, _jsonOptions);
                     if (directData != null)
                     {
@@ -128,8 +122,6 @@ namespace monitor_desktop.Services
                             Data = directData
                         };
                     }
-
-                    // If we can't deserialize to T, but have content, return error with content
                     if (!response.IsSuccessStatusCode)
                     {
                         return new ApiResponse<T>
@@ -161,12 +153,5 @@ namespace monitor_desktop.Services
                 Data = default
             };
         }
-    }
-
-    public class BackendApiResponse<T>
-    {
-        public int Status { get; set; }
-        public string Message { get; set; }
-        public T Data { get; set; }
     }
 }

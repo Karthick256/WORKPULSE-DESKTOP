@@ -1,10 +1,8 @@
-﻿using System;
+﻿using Microsoft.Win32;
+using monitor_desktop.Views;
 using System.Diagnostics;
-using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Threading;
-using monitor_desktop.Views;
-using Microsoft.Win32;
 
 namespace monitor_desktop.Services
 {
@@ -16,9 +14,8 @@ namespace monitor_desktop.Services
         private DateTime _lastCheckTime;
         private DateTime _nextReminderTime;
 
-        // Configuration
-        private const int CHECK_INTERVAL_HOURS = 6; // Check every 6 hours
-        private const int REMINDER_DELAY_HOURS = 24; // Remind after 24 hours if skipped
+        private const int CHECK_INTERVAL_HOURS = 6;
+        private const int REMINDER_DELAY_HOURS = 24;
 
         public event EventHandler<UpdateInfo> UpdateFound;
 
@@ -77,10 +74,7 @@ namespace monitor_desktop.Services
             _updateCheckTimer.Tick += async (s, e) => await CheckForUpdatesAsync();
             _updateCheckTimer.Start();
 
-            // Also check on startup
             Application.Current.Dispatcher.BeginInvoke(async () => await CheckForUpdatesAsync());
-
-            Debug.WriteLine("Auto-update background checking started");
         }
 
         public void StopBackgroundChecking()
@@ -94,12 +88,8 @@ namespace monitor_desktop.Services
             if (_isChecking)
                 return;
 
-            // Check if we should remind later
             if (!silent && _nextReminderTime > DateTime.Now)
-            {
-                Debug.WriteLine($"Update reminder skipped until {_nextReminderTime}");
                 return;
-            }
 
             _isChecking = true;
 
@@ -112,18 +102,13 @@ namespace monitor_desktop.Services
                     _lastCheckTime = DateTime.Now;
                     SaveSettings();
 
-                    Debug.WriteLine($"Update found: {updateInfo.LatestVersion.Version}");
-
-                    // Notify UI
                     UpdateFound?.Invoke(this, updateInfo);
 
-                    // Show update dialog
                     await Application.Current.Dispatcher.InvokeAsync(() =>
                     {
                         var dialog = new UpdateDialog(updateInfo);
                         var result = dialog.ShowDialog();
 
-                        // If user clicked "Remind Later"
                         if (result == false && !updateInfo.LatestVersion.IsMandatory)
                         {
                             _nextReminderTime = DateTime.Now.AddHours(REMINDER_DELAY_HOURS);

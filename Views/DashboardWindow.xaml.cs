@@ -47,7 +47,6 @@ namespace monitor_desktop.Views
             }
         }
 
-        // Window Control Handlers
         private void MinimizeButton_Click(object sender, RoutedEventArgs e)
         {
             WindowState = WindowState.Minimized;
@@ -58,12 +57,12 @@ namespace monitor_desktop.Views
             if (WindowState == WindowState.Normal)
             {
                 WindowState = WindowState.Maximized;
-                MaximizeButton.Content = "❐"; // Restore icon
+                MaximizeButton.Content = "❐";
             }
             else
             {
                 WindowState = WindowState.Normal;
-                MaximizeButton.Content = "□"; // Maximize icon
+                MaximizeButton.Content = "□";
             }
         }
 

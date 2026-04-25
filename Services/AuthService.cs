@@ -1,5 +1,4 @@
-﻿
-using monitor_desktop.Models;
+﻿using monitor_desktop.Models;
 using monitor_desktop.Models.AuthManagement;
 
 namespace monitor_desktop.Services

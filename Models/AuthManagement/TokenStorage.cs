@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-
-namespace monitor_desktop.Models.AuthManagement
+﻿namespace monitor_desktop.Models.AuthManagement
 {
     public class TokenStorage
     {

@@ -1,5 +1,4 @@
-﻿
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows;
@@ -29,8 +28,6 @@ namespace monitor_desktop.Services
         private const int WM_LBUTTONDBLCLK = 0x0203;
         private const int WM_MOUSEWHEEL = 0x020A;
 
-
-        // Enhanced Mouse counters
         private int _totalLeftClicks;
         private int _totalRightClicks;
         private int _totalMiddleClicks;
@@ -41,7 +38,6 @@ namespace monitor_desktop.Services
         private DateTime _lastScrollTime;
         private DateTime _lastMouseMoveTime;
 
-        // Mouse & Keyboard counters
         private int _totalMouseClicks;
         private int _totalMouseMovements;
         private int _totalKeystrokes;
@@ -57,28 +53,24 @@ namespace monitor_desktop.Services
         private Timer _mouseKeyboardTimer;
         private readonly int _mouseKeyboardSendIntervalMinutes = 10;
 
-        // Idle tracking
         private DateTime _lastActivityTime = DateTime.Now;
         private bool _isIdle;
         private DateTime _idleStartTime;
         private Timer _idleCheckTimer;
         private bool _isTrackingPaused;
 
-        // Application tracking
         private string _currentAppName;
         private string _currentWindowTitle;
         private DateTime _currentAppStartTime;
         private int _currentAppFocusCount;
         private bool _isAppTrackingPaused;
 
-        // Browser tracking
         private bool _isBrowserActive;
         private string _currentBrowserName;
         private DateTime _currentBrowserStartTime;
         private long? _currentBrowserTempId;
         private bool _isBrowserTrackingPaused;
 
-        // URL tracking
         private string _currentUrl;
         private string _currentUrlTitle;
         private string _currentUrlDomain;
@@ -86,17 +78,14 @@ namespace monitor_desktop.Services
         private List<PendingUrlVisit> _pendingUrlVisits = new List<PendingUrlVisit>();
         private bool _isUrlTrackingPaused;
 
-        // Mouse/keyboard hooks
         private LowLevelKeyboardProc _keyboardProc;
         private LowLevelMouseProc _mouseProc;
         private IntPtr _keyboardHookId = IntPtr.Zero;
         private IntPtr _mouseHookId = IntPtr.Zero;
 
-        // Configuration
         private int _idleThresholdSeconds = 120;
         private bool _isSystemSleeping;
 
-        // Heartbeat
         private Timer _heartbeatTimer;
 
         public event EventHandler<string> StatusChanged;
@@ -162,20 +151,12 @@ namespace monitor_desktop.Services
             SystemEvents.SessionSwitch += OnSessionSwitch;
         }
 
-        private void AddDebugLog(string message)
-        {
-            var logEntry = $"[{DateTime.Now:HH:mm:ss.fff}] {message}";
-            Debug.WriteLine(logEntry);
-            StatusChanged?.Invoke(this, logEntry);
-        }
-
         private void OnScreenshotStatusChanged(object sender, string status)
         {
-            AddDebugLog($"[SCREENSHOT] {status}");
+            StatusChanged?.Invoke(this, $"[SCREENSHOT] {status}");
         }
 
         #region Native Methods
-
         [DllImport("user32.dll")]
         private static extern IntPtr GetForegroundWindow();
 
@@ -237,23 +218,19 @@ namespace monitor_desktop.Services
         {
             return (uint)Environment.TickCount - GetLastInputTime();
         }
-
         #endregion
 
         #region System Event Handlers
-
         private void OnPowerModeChanged(object sender, PowerModeChangedEventArgs e)
         {
             switch (e.Mode)
             {
                 case PowerModes.Suspend:
                     _isSystemSleeping = true;
-                    AddDebugLog("System entering sleep mode - pausing tracking");
                     PauseTrackingForIdle();
                     break;
                 case PowerModes.Resume:
                     _isSystemSleeping = false;
-                    AddDebugLog("System resumed from sleep - resuming tracking");
                     _lastActivityTime = DateTime.Now;
                     if (_isIdle) ResumeTrackingAfterIdle();
                     break;
@@ -265,21 +242,17 @@ namespace monitor_desktop.Services
             switch (e.Reason)
             {
                 case SessionSwitchReason.SessionLock:
-                    AddDebugLog("Workstation locked - pausing tracking");
                     PauseTrackingForIdle();
                     break;
                 case SessionSwitchReason.SessionUnlock:
-                    AddDebugLog("Workstation unlocked - resuming tracking");
                     _lastActivityTime = DateTime.Now;
                     if (_isIdle) ResumeTrackingAfterIdle();
                     break;
             }
         }
-
         #endregion
 
         #region Idle Tracking
-
         private void PauseTrackingForIdle()
         {
             if (!_isTracking || _isTrackingPaused) return;
@@ -287,7 +260,6 @@ namespace monitor_desktop.Services
             _isAppTrackingPaused = true;
             _isBrowserTrackingPaused = true;
             _isUrlTrackingPaused = true;
-            AddDebugLog("TRACKING PAUSED - No activity will be recorded until idle ends");
         }
 
         private void ResumeTrackingAfterIdle()
@@ -301,8 +273,6 @@ namespace monitor_desktop.Services
             if (!string.IsNullOrEmpty(_currentAppName)) _currentAppStartTime = DateTime.Now;
             if (_isBrowserActive) _currentBrowserStartTime = DateTime.Now;
             if (!string.IsNullOrEmpty(_currentUrl)) _currentUrlStartTime = DateTime.Now;
-
-            AddDebugLog("TRACKING RESUMED - Activity recording continues");
         }
 
         private void ResetIdleState()
@@ -316,7 +286,6 @@ namespace monitor_desktop.Services
 
                 if (idleDurationSeconds >= _idleThresholdSeconds)
                 {
-                    AddDebugLog($"Idle ended - Duration: {idleDurationSeconds}s");
                     _ = SendIdlePeriodAsync(_idleStartTime, idleEndTime, idleDurationSeconds);
                 }
 
@@ -336,7 +305,6 @@ namespace monitor_desktop.Services
             {
                 _isIdle = true;
                 _idleStartTime = DateTime.Now;
-                AddDebugLog($"Idle started at {_idleStartTime:HH:mm:ss} (System idle: {effectiveIdleSeconds:F0}s)");
                 PauseTrackingForIdle();
             }
             else if (_isIdle && effectiveIdleSeconds < _idleThresholdSeconds)
@@ -360,22 +328,16 @@ namespace monitor_desktop.Services
                     DurationSeconds = durationSeconds
                 };
 
-                var response = await _trackingService.LogIdlePeriod(request);
-                if (response.Status == 200 || response.Status == 201)
-                    AddDebugLog($"✓ Idle period sent: {durationSeconds}s");
-                else
-                    AddDebugLog($"✗ Failed to send idle period: {response.Message}");
+                await _trackingService.LogIdlePeriod(request);
             }
             catch (Exception ex)
             {
-                AddDebugLog($"✗ Error sending idle period: {ex.Message}");
+                Debug.WriteLine($"Error sending idle period: {ex.Message}");
             }
         }
-
         #endregion
 
         #region Browser URL Extraction
-
         private bool IsBrowserProcess(string processName)
         {
             var browsers = new[] { "chrome", "firefox", "edge", "msedge", "opera", "brave", "browser" };
@@ -547,16 +509,13 @@ namespace monitor_desktop.Services
             }
             return null;
         }
-
         #endregion
 
         #region Application Tracking
-
         private void StartWindowMonitoring()
         {
             Task.Run(async () =>
             {
-                AddDebugLog("Window monitoring started");
                 while (_isTracking && !_isDisposed)
                 {
                     await Task.Delay(1000);
@@ -624,8 +583,6 @@ namespace monitor_desktop.Services
 
             if (currentKey != appKey)
             {
-                AddDebugLog($"App changed - New: {processName}");
-
                 if (!string.IsNullOrEmpty(_currentAppName))
                 {
                     SendApplicationUsageAndReset();
@@ -666,9 +623,7 @@ namespace monitor_desktop.Services
                     IsProductive = true
                 };
 
-                var response = await _trackingService.SaveApplicationUsage(request);
-                if (response.Status == 200 || response.Status == 201)
-                    AddDebugLog($"✓ App sent: {_currentAppName} ({durationSeconds}s)");
+                await _trackingService.SaveApplicationUsage(request);
             }
 
             _currentAppName = null;
@@ -709,11 +664,9 @@ namespace monitor_desktop.Services
                 return AppCategory.ENTERTAINMENT;
             return AppCategory.OTHER;
         }
-
         #endregion
 
         #region Browser and URL Tracking
-
         private async void TrackBrowserActivity(IntPtr handle, string processName, string windowTitle)
         {
             if (_isBrowserTrackingPaused) return;
@@ -728,11 +681,8 @@ namespace monitor_desktop.Services
 
             string domain = !string.IsNullOrEmpty(currentUrl) ? ExtractDomain(currentUrl) : null;
 
-            // Check if browser changed
             if (!_isBrowserActive || _currentBrowserName != browserName)
             {
-                AddDebugLog($"Browser changed - New: {browserName}");
-
                 if (_isBrowserActive)
                 {
                     await SaveCurrentBrowserAndPendingUrls();
@@ -743,16 +693,10 @@ namespace monitor_desktop.Services
                 _currentBrowserStartTime = DateTime.Now;
                 _currentBrowserTempId = DateTime.Now.Ticks;
                 _pendingUrlVisits.Clear();
-
-                AddDebugLog($"Started tracking browser: {browserName}");
             }
 
-            // Check if URL changed
             if (!_isUrlTrackingPaused && !string.IsNullOrEmpty(currentUrl) && _currentUrl != currentUrl)
             {
-                AddDebugLog($"URL changed - New: {domain}");
-
-                // Send previous URL visit IMMEDIATELY (like application usage)
                 if (!string.IsNullOrEmpty(_currentUrl))
                 {
                     var endTime = DateTime.Now;
@@ -760,7 +704,6 @@ namespace monitor_desktop.Services
 
                     if (durationSeconds > 0)
                     {
-                        // Send directly to API instead of adding to pending list
                         var urlRequest = new BrowserUrlVisitRequest
                         {
                             SessionId = _currentSessionId,
@@ -774,17 +717,10 @@ namespace monitor_desktop.Services
                             VisitCount = 1
                         };
 
-                        AddDebugLog($"Sending URL immediately: {_currentUrlDomain} ({durationSeconds}s)");
                         var response = await _trackingService.SaveBrowserUrlVisit(urlRequest);
 
-                        if (response.Status == 200 || response.Status == 201)
+                        if (response.Status != 200 && response.Status != 201)
                         {
-                            AddDebugLog($"✓ URL sent immediately: {_currentUrlDomain}");
-                        }
-                        else
-                        {
-                            AddDebugLog($"✗ Failed to send URL: {_currentUrlDomain} - {response.Message}");
-                            // If failed, add to pending list for later retry
                             var pendingVisit = new PendingUrlVisit
                             {
                                 Url = _currentUrl,
@@ -802,13 +738,10 @@ namespace monitor_desktop.Services
                     }
                 }
 
-                // Start tracking new URL
                 _currentUrl = currentUrl;
                 _currentUrlTitle = windowTitle;
                 _currentUrlDomain = domain;
                 _currentUrlStartTime = DateTime.Now;
-
-                AddDebugLog($"Started tracking URL: {domain}");
             }
         }
 
@@ -831,12 +764,9 @@ namespace monitor_desktop.Services
                     DurationSeconds = durationSeconds
                 };
 
-                AddDebugLog($"Saving browser: {_currentBrowserName} ({durationSeconds}s)");
                 await _trackingService.SaveBrowserUsage(browserRequest);
-                AddDebugLog($"✓ Browser saved: {_currentBrowserName}");
             }
 
-            // Only send pending URLs that failed during immediate send (retry)
             foreach (var visit in _pendingUrlVisits)
             {
                 var urlRequest = new BrowserUrlVisitRequest
@@ -852,20 +782,9 @@ namespace monitor_desktop.Services
                     VisitCount = visit.VisitCount
                 };
 
-                AddDebugLog($"Retrying failed URL: {visit.Domain} ({visit.DurationSeconds}s)");
-                var response = await _trackingService.SaveBrowserUrlVisit(urlRequest);
-
-                if (response.Status == 200 || response.Status == 201)
-                {
-                    AddDebugLog($"✓ URL retry successful: {visit.Domain}");
-                }
-                else
-                {
-                    AddDebugLog($"✗ URL retry failed: {visit.Domain} - {response.Message}");
-                }
+                await _trackingService.SaveBrowserUrlVisit(urlRequest);
             }
 
-            // Send current URL if it exists and hasn't been sent yet
             if (!string.IsNullOrEmpty(_currentUrl))
             {
                 var currentDuration = (int)(endTime - _currentUrlStartTime).TotalSeconds;
@@ -884,17 +803,7 @@ namespace monitor_desktop.Services
                         VisitCount = 1
                     };
 
-                    AddDebugLog($"Sending final URL: {_currentUrlDomain} ({currentDuration}s)");
-                    var response = await _trackingService.SaveBrowserUrlVisit(currentUrlRequest);
-
-                    if (response.Status == 200 || response.Status == 201)
-                    {
-                        AddDebugLog($"✓ Final URL sent: {_currentUrlDomain}");
-                    }
-                    else
-                    {
-                        AddDebugLog($"✗ Failed to send final URL: {_currentUrlDomain} - {response.Message}");
-                    }
+                    await _trackingService.SaveBrowserUrlVisit(currentUrlRequest);
                 }
             }
 
@@ -905,22 +814,18 @@ namespace monitor_desktop.Services
             _currentUrlDomain = null;
             _pendingUrlVisits.Clear();
         }
-
         #endregion
 
         #region Mouse & Keyboard
-
         private void StartMouseKeyboardTimer()
         {
             _mouseKeyboardTimer = new Timer(SendMouseKeyboardData, null, TimeSpan.FromMinutes(_mouseKeyboardSendIntervalMinutes), TimeSpan.FromMinutes(_mouseKeyboardSendIntervalMinutes));
-            AddDebugLog($"Mouse/Keyboard timer started - Interval: {_mouseKeyboardSendIntervalMinutes} minutes");
 
-            // Start WPM calculation timer
             Task.Run(async () =>
             {
                 while (_isTracking && !_isDisposed)
                 {
-                    await Task.Delay(60000); // Calculate WPM every minute
+                    await Task.Delay(60000);
                     CalculateWPM();
                 }
             });
@@ -932,7 +837,6 @@ namespace monitor_desktop.Services
 
             lock (_wpmLock)
             {
-                // Calculate WPM for the last minute (assuming average 5 chars per word)
                 var keystrokesInLastMinute = _currentBurstKeystrokes;
                 var wpm = (keystrokesInLastMinute / 5);
 
@@ -944,20 +848,17 @@ namespace monitor_desktop.Services
                         _peakWpm = wpm;
                     }
 
-                    // Count as typing burst if WPM > 20 (meaningful typing)
                     if (wpm > 20)
                     {
                         _typingBursts++;
                     }
 
-                    // Add to active typing seconds if WPM > 0
                     if (wpm > 0)
                     {
                         _totalActiveTypingSeconds += 60;
                     }
                 }
 
-                // Reset burst counter for next minute
                 _currentBurstKeystrokes = 0;
             }
         }
@@ -990,7 +891,6 @@ namespace monitor_desktop.Services
                 }
                 peakWpm = _peakWpm;
 
-                // Reset WPM measurements for next interval
                 _wpmMeasurements.Clear();
                 _peakWpm = 0;
             }
@@ -1022,13 +922,11 @@ namespace monitor_desktop.Services
                     DistancePixels = distancePixels
                 };
 
-                var response = await _trackingService.SaveMouseActivity(request);
-                if (response.Status == 200 || response.Status == 201)
-                    AddDebugLog($"✓ Mouse sent: L:{leftClicks} R:{rightClicks} M:{middleClicks} D:{doubleClicks} Scr:{scrollEvents} Dist:{distancePixels}px");
+                await _trackingService.SaveMouseActivity(request);
             }
             catch (Exception ex)
             {
-                AddDebugLog($"✗ Error sending mouse activity: {ex.Message}");
+                Debug.WriteLine($"Error sending mouse activity: {ex.Message}");
             }
         }
 
@@ -1052,30 +950,24 @@ namespace monitor_desktop.Services
                     ActiveTypingSeconds = activeTypingSeconds
                 };
 
-                var response = await _trackingService.SaveKeyboardActivity(request);
-                if (response.Status == 200 || response.Status == 201)
-                    AddDebugLog($"✓ Keyboard sent: K:{keystrokes} Special:{specialKeyCount} Bursts:{typingBursts} WPM:{avgWpm}/{peakWpm} Active:{activeTypingSeconds}s");
+                await _trackingService.SaveKeyboardActivity(request);
             }
             catch (Exception ex)
             {
-                AddDebugLog($"✗ Error sending keyboard activity: {ex.Message}");
+                Debug.WriteLine($"Error sending keyboard activity: {ex.Message}");
             }
         }
-
         #endregion
 
         #region Hooks
-
         private IntPtr KeyboardHookCallback(int nCode, IntPtr wParam, IntPtr lParam)
         {
             if (nCode >= 0 && wParam == (IntPtr)WM_KEYDOWN)
             {
                 if (!_isTrackingPaused)
                 {
-                    // Get the key information
                     int vkCode = Marshal.ReadInt32(lParam);
 
-                    // Check if it's a special key
                     if (IsSpecialKey(vkCode))
                     {
                         Interlocked.Increment(ref _totalSpecialKeyCount);
@@ -1084,7 +976,6 @@ namespace monitor_desktop.Services
                     Interlocked.Increment(ref _totalKeystrokes);
                     Interlocked.Increment(ref _currentBurstKeystrokes);
 
-                    // Update last keystroke time for burst detection
                     _lastKeystrokeTime = DateTime.Now;
                 }
                 ResetIdleState();
@@ -1094,63 +985,15 @@ namespace monitor_desktop.Services
 
         private bool IsSpecialKey(int vkCode)
         {
-            // Define special keys (modifiers, navigation, function keys, etc.)
             HashSet<int> specialKeys = new HashSet<int>
             {
-                // Modifiers
-                0x10, // Shift
-                0x11, // Ctrl
-                0x12, // Alt
-                0x5B, // Left Windows
-                0x5C, // Right Windows
-                
-                // Navigation
-                0x21, // Page Up
-                0x22, // Page Down
-                0x23, // End
-                0x24, // Home
-                0x25, // Left Arrow
-                0x26, // Up Arrow
-                0x27, // Right Arrow
-                0x28, // Down Arrow
-                
-                // Editing
-                0x2E, // Delete
-                0x08, // Backspace
-                0x0D, // Enter
-                0x1B, // Escape
-                0x09, // Tab
-                
-                // Function keys
-                0x70, // F1
-                0x71, // F2
-                0x72, // F3
-                0x73, // F4
-                0x74, // F5
-                0x75, // F6
-                0x76, // F7
-                0x77, // F8
-                0x78, // F9
-                0x79, // F10
-                0x7A, // F11
-                0x7B, // F12
-                
-                // Other
-                0x14, // Caps Lock
-                0x90, // Num Lock
-                0x91, // Scroll Lock
-                0x2C, // Print Screen
-                0x13, // Pause
-                
-                // Media keys (common codes)
-                0xAE, // Volume down
-                0xAF, // Volume up
-                0xAD, // Mute
-                0xB3, // Next track
-                0xB1, // Previous track
-                0xB0, // Play/Pause
+                0x10, 0x11, 0x12, 0x5B, 0x5C,
+                0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28,
+                0x2E, 0x08, 0x0D, 0x1B, 0x09,
+                0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7A, 0x7B,
+                0x14, 0x90, 0x91, 0x2C, 0x13,
+                0xAE, 0xAF, 0xAD, 0xB3, 0xB1, 0xB0,
             };
-
             return specialKeys.Contains(vkCode);
         }
 
@@ -1166,30 +1009,24 @@ namespace monitor_desktop.Services
                             Interlocked.Increment(ref _totalLeftClicks);
                             ResetIdleState();
                             break;
-
                         case WM_RBUTTONDOWN:
                             Interlocked.Increment(ref _totalRightClicks);
                             ResetIdleState();
                             break;
-
                         case WM_MBUTTONDOWN:
                             Interlocked.Increment(ref _totalMiddleClicks);
                             ResetIdleState();
                             break;
-
                         case WM_LBUTTONDBLCLK:
                             Interlocked.Increment(ref _totalDoubleClicks);
                             ResetIdleState();
                             break;
-
                         case WM_MOUSEWHEEL:
                             Interlocked.Increment(ref _totalScrollEvents);
                             _lastScrollTime = DateTime.Now;
                             ResetIdleState();
                             break;
-
                         case WM_MOUSEMOVE:
-                            // Calculate mouse movement distance
                             if (_lastMousePosition.X != 0 && _lastMousePosition.Y != 0)
                             {
                                 MSLLHOOKSTRUCT hookStruct = (MSLLHOOKSTRUCT)Marshal.PtrToStructure(lParam, typeof(MSLLHOOKSTRUCT));
@@ -1230,15 +1067,11 @@ namespace monitor_desktop.Services
             public uint time;
             public IntPtr dwExtraInfo;
         }
-
         #endregion
 
         #region Start/Stop
-
         public void StartTracking(long sessionId, int? idleThresholdSeconds = null)
         {
-            AddDebugLog($"=== START TRACKING - Session: {sessionId} ===");
-
             lock (_lockObject)
             {
                 if (_isTracking) StopTrackingAsync(false).Wait();
@@ -1254,7 +1087,6 @@ namespace monitor_desktop.Services
                 _isBrowserTrackingPaused = false;
                 _isUrlTrackingPaused = false;
 
-                // Reset mouse counters
                 _totalLeftClicks = 0;
                 _totalRightClicks = 0;
                 _totalMiddleClicks = 0;
@@ -1263,7 +1095,6 @@ namespace monitor_desktop.Services
                 _totalMouseDistance = 0;
                 _lastMousePosition = new Point(0, 0);
 
-                // Reset keyboard counters
                 _totalKeystrokes = 0;
                 _totalSpecialKeyCount = 0;
                 _typingBursts = 0;
@@ -1292,45 +1123,37 @@ namespace monitor_desktop.Services
                 {
                     _keyboardHookId = SetWindowsHookEx(WH_KEYBOARD_LL, _keyboardProc, GetModuleHandle(module.ModuleName), 0);
                     _mouseHookId = SetWindowsHookEx(WH_MOUSE_LL, _mouseProc, GetModuleHandle(module.ModuleName), 0);
-                    AddDebugLog("Hooks installed");
                 }
             }
             catch (Exception ex)
             {
-                AddDebugLog($"Error setting up hooks: {ex.Message}");
+                Debug.WriteLine($"Error setting up hooks: {ex.Message}");
             }
 
             StartWindowMonitoring();
             StartMouseKeyboardTimer();
             _idleCheckTimer = new Timer(_ => CheckIdleState(), null, 1000, 1000);
             _heartbeatTimer = new Timer(HeartbeatCallback, null, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));
-
-            AddDebugLog($"✓ Tracking started successfully");
         }
 
         private void HeartbeatCallback(object state)
         {
             if (!_isTracking || _isDisposed) return;
-            AddDebugLog("Heartbeat - tracking active");
         }
 
         public async Task StopTrackingAsync(bool sendFinalData = true)
         {
-            AddDebugLog($"=== STOP TRACKING ===");
             _screenshotCaptureService?.StopPolling();
             if (!_isTracking) return;
 
             if (sendFinalData && !_isTrackingPaused)
             {
-                // Send current application
                 if (!string.IsNullOrEmpty(_currentAppName))
                     SendApplicationUsageAndReset();
 
-                // Send browser usage and any pending/final URLs
                 if (_isBrowserActive)
                     await SaveCurrentBrowserAndPendingUrls();
 
-                // Send final mouse data with all counters
                 int leftClicks = Interlocked.Exchange(ref _totalLeftClicks, 0);
                 int rightClicks = Interlocked.Exchange(ref _totalRightClicks, 0);
                 int middleClicks = Interlocked.Exchange(ref _totalMiddleClicks, 0);
@@ -1339,7 +1162,6 @@ namespace monitor_desktop.Services
                 long distancePixels = Interlocked.Read(ref _totalMouseDistance);
                 Interlocked.Exchange(ref _totalMouseDistance, 0);
 
-                // Send final keyboard data with all counters
                 int keystrokes = Interlocked.Exchange(ref _totalKeystrokes, 0);
                 int specialKeyCount = Interlocked.Exchange(ref _totalSpecialKeyCount, 0);
                 int typingBursts = Interlocked.Exchange(ref _typingBursts, 0);
@@ -1395,10 +1217,7 @@ namespace monitor_desktop.Services
                 _isTracking = false;
                 _isTrackingPaused = false;
             }
-
-            AddDebugLog($"✓ Tracking stopped");
         }
-
         #endregion
 
         public void Dispose()

@@ -1,5 +1,4 @@
-﻿
-using monitor_desktop.Models;
+﻿using monitor_desktop.Models;
 using monitor_desktop.Models.ActivityMonitoring;
 
 namespace monitor_desktop.Services
@@ -145,28 +144,6 @@ namespace monitor_desktop.Services
                 {
                     Status = 500,
                     Message = $"Failed to upload screenshot: {ex.Message}",
-                    Data = null
-                };
-            }
-        }
-
-        public async Task<ApiResponse<ScreenshotResponseDto>> RequestScreenshot(long sessionId, string reason)
-        {
-            try
-            {
-                var request = new ScreenshotRequestDto
-                {
-                    SessionId = sessionId,
-                    Reason = reason
-                };
-                return await _apiClient.PostAsync<ScreenshotResponseDto>(ApiConfig.TrackingScreenshotRequest, request);
-            }
-            catch (Exception ex)
-            {
-                return new ApiResponse<ScreenshotResponseDto>
-                {
-                    Status = 500,
-                    Message = $"Failed to request screenshot: {ex.Message}",
                     Data = null
                 };
             }

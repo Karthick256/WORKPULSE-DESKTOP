@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-
-namespace monitor_desktop.Models.AuthManagement
+﻿namespace monitor_desktop.Models.AuthManagement
 {
     public class JwtResponse
     {

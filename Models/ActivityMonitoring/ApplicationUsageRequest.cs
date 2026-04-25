@@ -1,5 +1,4 @@
-﻿using System;
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 using monitor_desktop.Models.Enums;
 
 namespace monitor_desktop.Models.ActivityMonitoring
