@@ -5,7 +5,7 @@ on:
     branches:
       - master
     tags:
-      - 'v*'  # Also trigger on tag pushes
+      - 'v*'
 
 jobs:
   release:
@@ -28,27 +28,47 @@ jobs:
 
       - name: Get version from tag or commit count
         id: version
+        shell: pwsh
         run: |
           $tag = git describe --tags --abbrev=0 2>$null
           if ($tag) {
             $version = $tag.TrimStart('v')
-            echo "VERSION=$version" >> $env:GITHUB_OUTPUT
-            echo "TAG_EXISTS=true" >> $env:GITHUB_OUTPUT
+            echo "VERSION=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+            echo "TAG_EXISTS=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           } else {
             $count = (git rev-list --count HEAD)
             $version = "1.0.$count"
-            echo "VERSION=$version" >> $env:GITHUB_OUTPUT
-            echo "TAG_EXISTS=false" >> $env:GITHUB_OUTPUT
+            echo "VERSION=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+            echo "TAG_EXISTS=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           }
+          Write-Host "Version: $version"
 
-      - name: Update Assembly Version
+      - name: Update csproj version
+        shell: pwsh
         run: |
           $version = "${{ steps.version.outputs.VERSION }}"
           $csprojPath = "monitor_desktop.csproj"
+          
+          Write-Host "Setting version to: $version"
+          
+          # Read the csproj file
           $content = Get-Content $csprojPath -Raw
-          $content = $content -replace '<Version>.*?</Version>', '<Version>$version</Version>'
-          $content = $content -replace '<FileVersion>.*?</FileVersion>', '<FileVersion>$version</FileVersion>'
-          Set-Content $csprojPath $content
+          
+          # Replace version tags - using proper escaping
+          $content = $content -replace '<Version>.*?</Version>', '<Version>' + $version + '</Version>'
+          $content = $content -replace '<AssemblyVersion>.*?</AssemblyVersion>', '<AssemblyVersion>' + $version + '.0</AssemblyVersion>'
+          $content = $content -replace '<FileVersion>.*?</FileVersion>', '<FileVersion>' + $version + '.0</FileVersion>'
+          
+          # Save the updated content
+          Set-Content $csprojPath $content -NoNewline
+          
+          Write-Host "Updated csproj with version $version"
+          
+          # Display the updated version lines for verification
+          Get-Content $csprojPath | Select-String -Pattern "Version"
+
+      - name: Restore dependencies
+        run: dotnet restore monitor_desktop.csproj
 
       - name: Build and Publish
         run: |
@@ -63,10 +83,12 @@ jobs:
             -o publish/
 
       - name: Create ZIP Archive
+        shell: pwsh
         run: |
+          $version = "${{ steps.version.outputs.VERSION }}"
           Compress-Archive `
             -Path publish/* `
-            -DestinationPath "WorkPulse-v${{ steps.version.outputs.VERSION }}.zip"
+            -DestinationPath "WorkPulse-v$version.zip"
 
       - name: Create or Update Release
         uses: softprops/action-gh-release@v2
