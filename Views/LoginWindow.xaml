@@ -184,7 +184,7 @@
                             <TextBlock Text="Smart employee activity tracking and productivity." FontSize="13" Foreground="#CCFFFFFF" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" Margin="0,0,0,32"/>
                         </StackPanel>
 
-                        <TextBlock Text="© 2026" FontSize="11" Foreground="#80FFFFFF" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,16"/>
+                        <TextBlock Text="© 2026 WorkPulse" FontSize="11" Foreground="#80FFFFFF" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,16"/>
                     </Grid>
                 </Border>
 
