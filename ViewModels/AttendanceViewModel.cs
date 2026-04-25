@@ -261,7 +261,13 @@ namespace monitor_desktop.ViewModels
                     Debug.WriteLine("Tracking stopped before checkout");
                 }
 
-                var response = await _attendanceService.CheckOut(CurrentSession.SessionId.Value);
+                // Try with time parameter first
+                var checkOutTime = DateTime.Now;
+                Debug.WriteLine($"Attempting checkout at: {checkOutTime:yyyy-MM-dd HH:mm:ss}");
+
+                var response = await _attendanceService.CheckOut(CurrentSession.SessionId.Value, checkOutTime);
+
+               
 
                 if (response.Status == 200 && response.Data != null)
                 {
@@ -284,6 +290,7 @@ namespace monitor_desktop.ViewModels
                 else
                 {
                     StatusMessage = response.Message ?? "Check-out failed.";
+                    Debug.WriteLine($"Checkout error details: Status={response.Status}, Message={response.Message}");
                     Application.Current?.Dispatcher.Invoke(() =>
                     {
                         MessageBox.Show(StatusMessage, "Check-Out Failed", MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -294,6 +301,7 @@ namespace monitor_desktop.ViewModels
             {
                 StatusMessage = $"Check-out error: {ex.Message}";
                 Debug.WriteLine($"CheckOut Error: {ex.Message}");
+                Debug.WriteLine($"CheckOut StackTrace: {ex.StackTrace}");
                 Application.Current?.Dispatcher.Invoke(() =>
                 {
                     MessageBox.Show(StatusMessage, "Check-Out Error", MessageBoxButton.OK, MessageBoxImage.Error);

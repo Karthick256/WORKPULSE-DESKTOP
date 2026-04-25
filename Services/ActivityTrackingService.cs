@@ -114,6 +114,63 @@ namespace monitor_desktop.Services
                 };
             }
         }
+
+        public async Task<ApiResponse<List<ScreenshotResponseDto>>> GetPendingScreenshotRequests(long sessionId)
+        {
+            try
+            {
+                var response = await _apiClient.GetAsync<List<ScreenshotResponseDto>>($"{ApiConfig.TrackingScreenshotPending}/{sessionId}");
+                return response;
+            }
+            catch (Exception ex)
+            {
+                return new ApiResponse<List<ScreenshotResponseDto>>
+                {
+                    Status = 500,
+                    Message = $"Failed to get pending requests: {ex.Message}",
+                    Data = null
+                };
+            }
+        }
+
+        public async Task<ApiResponse<ScreenshotResponseDto>> UploadScreenshot(DesktopAgentScreenshotUploadDto uploadDto)
+        {
+            try
+            {
+                return await _apiClient.PostAsync<ScreenshotResponseDto>(ApiConfig.TrackingScreenshotUpload, uploadDto);
+            }
+            catch (Exception ex)
+            {
+                return new ApiResponse<ScreenshotResponseDto>
+                {
+                    Status = 500,
+                    Message = $"Failed to upload screenshot: {ex.Message}",
+                    Data = null
+                };
+            }
+        }
+
+        public async Task<ApiResponse<ScreenshotResponseDto>> RequestScreenshot(long sessionId, string reason)
+        {
+            try
+            {
+                var request = new ScreenshotRequestDto
+                {
+                    SessionId = sessionId,
+                    Reason = reason
+                };
+                return await _apiClient.PostAsync<ScreenshotResponseDto>(ApiConfig.TrackingScreenshotRequest, request);
+            }
+            catch (Exception ex)
+            {
+                return new ApiResponse<ScreenshotResponseDto>
+                {
+                    Status = 500,
+                    Message = $"Failed to request screenshot: {ex.Message}",
+                    Data = null
+                };
+            }
+        }
     }
 
     public class VoidResponse { }

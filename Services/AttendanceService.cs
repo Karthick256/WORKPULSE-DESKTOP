@@ -1,7 +1,7 @@
-﻿
-using monitor_desktop.Models;
+﻿using monitor_desktop.Models;
 using monitor_desktop.Models.ActivityMonitoring;
 using monitor_desktop.Models.Enums;
+using System.Diagnostics;
 
 namespace monitor_desktop.Services
 {
@@ -31,11 +31,19 @@ namespace monitor_desktop.Services
             }
         }
 
-        public async Task<ApiResponse<AttendanceSessionResponse>> CheckOut(long sessionId)
+        // Updated CheckOut with time parameter
+        public async Task<ApiResponse<AttendanceSessionResponse>> CheckOut(long sessionId, DateTime checkOutTime)
         {
             try
             {
-                return await _apiClient.PostAsync<AttendanceSessionResponse>($"{ApiConfig.AttendanceCheckOut}/{sessionId}", null);
+                // With milliseconds: 2026-04-25T13:35:42.123
+                var formattedTime = checkOutTime.ToString("yyyy-MM-ddTHH:mm:ss.fff", System.Globalization.CultureInfo.InvariantCulture);
+
+                var url = $"{ApiConfig.AttendanceCheckOut}/{sessionId}?checkOutTime={Uri.EscapeDataString(formattedTime)}";
+
+                Debug.WriteLine($"Checkout URL: {url}");
+
+                return await _apiClient.PostAsync<AttendanceSessionResponse>(url, null);
             }
             catch (Exception ex)
             {
@@ -85,7 +93,8 @@ namespace monitor_desktop.Services
                 WorkstationName = Environment.MachineName,
                 IpAddress = GetLocalIpAddress(),
                 OsInfo = GetOperatingSystemInfo(),
-                MacAddress = GetMacAddress()
+                MacAddress = GetMacAddress(),
+                CheckInTime = DateTime.Now  // Client provides current time
             };
             return await CheckIn(request);
         }

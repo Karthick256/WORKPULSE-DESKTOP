@@ -16,6 +16,7 @@ namespace monitor_desktop.Services
         private static readonly object _instanceLock = new object();
 
         private readonly ActivityTrackingService _trackingService;
+        private ScreenshotCaptureService _screenshotCaptureService;
         private readonly TokenManager _tokenManager;
 
         private bool _isTracking;
@@ -25,10 +26,34 @@ namespace monitor_desktop.Services
 
         public bool IsDisposed => _isDisposed;
 
+        private const int WM_LBUTTONDBLCLK = 0x0203;
+        private const int WM_MOUSEWHEEL = 0x020A;
+
+
+        // Enhanced Mouse counters
+        private int _totalLeftClicks;
+        private int _totalRightClicks;
+        private int _totalMiddleClicks;
+        private int _totalDoubleClicks;
+        private int _totalScrollEvents;
+        private long _totalMouseDistance;
+        private Point _lastMousePosition;
+        private DateTime _lastScrollTime;
+        private DateTime _lastMouseMoveTime;
+
         // Mouse & Keyboard counters
         private int _totalMouseClicks;
         private int _totalMouseMovements;
         private int _totalKeystrokes;
+        private int _totalSpecialKeyCount;
+        private int _typingBursts;
+        private int _currentBurstKeystrokes;
+        private DateTime _lastKeystrokeTime;
+        private int _totalActiveTypingSeconds;
+        private List<int> _wpmMeasurements = new List<int>();
+        private int _peakWpm;
+        private readonly object _wpmLock = new object();
+
         private Timer _mouseKeyboardTimer;
         private readonly int _mouseKeyboardSendIntervalMinutes = 10;
 
@@ -131,6 +156,8 @@ namespace monitor_desktop.Services
         {
             _trackingService = trackingService;
             _tokenManager = tokenManager;
+            _screenshotCaptureService = new ScreenshotCaptureService(trackingService, tokenManager);
+            _screenshotCaptureService.StatusChanged += OnScreenshotStatusChanged;
             SystemEvents.PowerModeChanged += OnPowerModeChanged;
             SystemEvents.SessionSwitch += OnSessionSwitch;
         }
@@ -140,6 +167,11 @@ namespace monitor_desktop.Services
             var logEntry = $"[{DateTime.Now:HH:mm:ss.fff}] {message}";
             Debug.WriteLine(logEntry);
             StatusChanged?.Invoke(this, logEntry);
+        }
+
+        private void OnScreenshotStatusChanged(object sender, string status)
+        {
+            AddDebugLog($"[SCREENSHOT] {status}");
         }
 
         #region Native Methods
@@ -648,14 +680,14 @@ namespace monitor_desktop.Services
         {
             appName = appName.ToLower();
             if (appName.Contains("excel") || appName.Contains("word") || appName.Contains("powerpoint") ||
-                appName.Contains("onenote"))
+                appName.Contains("onenote") || appName.Contains("winword"))
                 return AppCategory.OFFICE;
             if (appName.Contains("outlook") || appName.Contains("slack") || appName.Contains("teams") ||
                 appName.Contains("zoom") || appName.Contains("skype") || appName.Contains("meet"))
                 return AppCategory.COMMUNICATION;
-            if (appName.Contains("visual studio") || appName.Contains("vscode") || appName.Contains("intellij") ||
-                appName.Contains("eclipse") || appName.Contains("android studio") || appName.Contains("pycharm") ||
-                appName.Contains("webstorm"))
+            if (appName.Contains("visual studio") || appName.Contains("code") || appName.Contains("intellij") ||
+                appName.Contains("eclipse") || appName.Contains("android studio") || appName.Contains("devenv") ||
+                appName.Contains("webstorm") || appName.Contains("monitor_desktop"))
                 return AppCategory.DEVELOPMENT;
             if (appName.Contains("mysql") || appName.Contains("postgres") || appName.Contains("mongodb") ||
                 appName.Contains("sql server") || appName.Contains("oracle") || appName.Contains("dbeaver"))
@@ -664,10 +696,10 @@ namespace monitor_desktop.Services
                 appName.Contains("canva") || appName.Contains("after effects") || appName.Contains("premiere"))
                 return AppCategory.DESIGN;
             if (appName.Contains("chrome") || appName.Contains("firefox") || appName.Contains("edge") ||
-                appName.Contains("safari") || appName.Contains("opera") || appName.Contains("brave"))
+                appName.Contains("safari") || appName.Contains("opera") || appName.Contains("brave") || appName.Contains("ulaa"))
                 return AppCategory.BROWSER;
             if (appName.Contains("task manager") || appName.Contains("settings") || appName.Contains("control panel") ||
-                appName.Contains("cmd") || appName.Contains("powershell") || appName.Contains("terminal"))
+                appName.Contains("cmd") || appName.Contains("powershell") || appName.Contains("terminal") || appName.Contains("explorer"))
                 return AppCategory.SYSTEM;
             if (appName.Contains("antivirus") || appName.Contains("windows defender") || appName.Contains("kaspersky") ||
                 appName.Contains("norton") || appName.Contains("mcafee"))
@@ -720,6 +752,7 @@ namespace monitor_desktop.Services
             {
                 AddDebugLog($"URL changed - New: {domain}");
 
+                // Send previous URL visit IMMEDIATELY (like application usage)
                 if (!string.IsNullOrEmpty(_currentUrl))
                 {
                     var endTime = DateTime.Now;
@@ -727,23 +760,49 @@ namespace monitor_desktop.Services
 
                     if (durationSeconds > 0)
                     {
-                        var pendingVisit = new PendingUrlVisit
+                        // Send directly to API instead of adding to pending list
+                        var urlRequest = new BrowserUrlVisitRequest
                         {
+                            SessionId = _currentSessionId,
                             Url = _currentUrl,
                             PageTitle = _currentUrlTitle,
                             Domain = _currentUrlDomain,
-                            StartTime = _currentUrlStartTime,
-                            EndTime = endTime,
-                            DurationSeconds = durationSeconds,
                             Category = GetUrlCategory(_currentUrlDomain, _currentUrl),
+                            VisitedAt = endTime,
+                            TimeSpentSeconds = durationSeconds,
                             IsProductive = true,
                             VisitCount = 1
                         };
-                        _pendingUrlVisits.Add(pendingVisit);
-                        AddDebugLog($"Added pending URL: {_currentUrlDomain} ({durationSeconds}s)");
+
+                        AddDebugLog($"Sending URL immediately: {_currentUrlDomain} ({durationSeconds}s)");
+                        var response = await _trackingService.SaveBrowserUrlVisit(urlRequest);
+
+                        if (response.Status == 200 || response.Status == 201)
+                        {
+                            AddDebugLog($"✓ URL sent immediately: {_currentUrlDomain}");
+                        }
+                        else
+                        {
+                            AddDebugLog($"✗ Failed to send URL: {_currentUrlDomain} - {response.Message}");
+                            // If failed, add to pending list for later retry
+                            var pendingVisit = new PendingUrlVisit
+                            {
+                                Url = _currentUrl,
+                                PageTitle = _currentUrlTitle,
+                                Domain = _currentUrlDomain,
+                                StartTime = _currentUrlStartTime,
+                                EndTime = endTime,
+                                DurationSeconds = durationSeconds,
+                                Category = GetUrlCategory(_currentUrlDomain, _currentUrl),
+                                IsProductive = true,
+                                VisitCount = 1
+                            };
+                            _pendingUrlVisits.Add(pendingVisit);
+                        }
                     }
                 }
 
+                // Start tracking new URL
                 _currentUrl = currentUrl;
                 _currentUrlTitle = windowTitle;
                 _currentUrlDomain = domain;
@@ -777,12 +836,12 @@ namespace monitor_desktop.Services
                 AddDebugLog($"✓ Browser saved: {_currentBrowserName}");
             }
 
-            // Save all pending URL visits
+            // Only send pending URLs that failed during immediate send (retry)
             foreach (var visit in _pendingUrlVisits)
             {
                 var urlRequest = new BrowserUrlVisitRequest
                 {
-                    BrowserUsageId = null,
+                    SessionId = _currentSessionId,
                     Url = visit.Url,
                     PageTitle = visit.PageTitle,
                     Domain = visit.Domain,
@@ -793,20 +852,20 @@ namespace monitor_desktop.Services
                     VisitCount = visit.VisitCount
                 };
 
-                AddDebugLog($"Saving URL: {visit.Domain} ({visit.DurationSeconds}s)");
+                AddDebugLog($"Retrying failed URL: {visit.Domain} ({visit.DurationSeconds}s)");
                 var response = await _trackingService.SaveBrowserUrlVisit(urlRequest);
 
                 if (response.Status == 200 || response.Status == 201)
                 {
-                    AddDebugLog($"✓ URL saved: {visit.Domain}");
+                    AddDebugLog($"✓ URL retry successful: {visit.Domain}");
                 }
                 else
                 {
-                    AddDebugLog($"✗ Failed to save URL: {visit.Domain} - {response.Message}");
+                    AddDebugLog($"✗ URL retry failed: {visit.Domain} - {response.Message}");
                 }
             }
 
-            // Save current URL if exists
+            // Send current URL if it exists and hasn't been sent yet
             if (!string.IsNullOrEmpty(_currentUrl))
             {
                 var currentDuration = (int)(endTime - _currentUrlStartTime).TotalSeconds;
@@ -814,7 +873,7 @@ namespace monitor_desktop.Services
                 {
                     var currentUrlRequest = new BrowserUrlVisitRequest
                     {
-                        BrowserUsageId = null,
+                        SessionId = _currentSessionId,
                         Url = _currentUrl,
                         PageTitle = _currentUrlTitle,
                         Domain = _currentUrlDomain,
@@ -825,16 +884,16 @@ namespace monitor_desktop.Services
                         VisitCount = 1
                     };
 
-                    AddDebugLog($"Saving current URL: {_currentUrlDomain} ({currentDuration}s)");
+                    AddDebugLog($"Sending final URL: {_currentUrlDomain} ({currentDuration}s)");
                     var response = await _trackingService.SaveBrowserUrlVisit(currentUrlRequest);
 
                     if (response.Status == 200 || response.Status == 201)
                     {
-                        AddDebugLog($"✓ Current URL saved: {_currentUrlDomain}");
+                        AddDebugLog($"✓ Final URL sent: {_currentUrlDomain}");
                     }
                     else
                     {
-                        AddDebugLog($"✗ Failed to save current URL: {_currentUrlDomain} - {response.Message}");
+                        AddDebugLog($"✗ Failed to send final URL: {_currentUrlDomain} - {response.Message}");
                     }
                 }
             }
@@ -855,24 +914,97 @@ namespace monitor_desktop.Services
         {
             _mouseKeyboardTimer = new Timer(SendMouseKeyboardData, null, TimeSpan.FromMinutes(_mouseKeyboardSendIntervalMinutes), TimeSpan.FromMinutes(_mouseKeyboardSendIntervalMinutes));
             AddDebugLog($"Mouse/Keyboard timer started - Interval: {_mouseKeyboardSendIntervalMinutes} minutes");
+
+            // Start WPM calculation timer
+            Task.Run(async () =>
+            {
+                while (_isTracking && !_isDisposed)
+                {
+                    await Task.Delay(60000); // Calculate WPM every minute
+                    CalculateWPM();
+                }
+            });
+        }
+
+        private void CalculateWPM()
+        {
+            if (!_isTracking || _isTrackingPaused) return;
+
+            lock (_wpmLock)
+            {
+                // Calculate WPM for the last minute (assuming average 5 chars per word)
+                var keystrokesInLastMinute = _currentBurstKeystrokes;
+                var wpm = (keystrokesInLastMinute / 5);
+
+                if (wpm > 0)
+                {
+                    _wpmMeasurements.Add(wpm);
+                    if (wpm > _peakWpm)
+                    {
+                        _peakWpm = wpm;
+                    }
+
+                    // Count as typing burst if WPM > 20 (meaningful typing)
+                    if (wpm > 20)
+                    {
+                        _typingBursts++;
+                    }
+
+                    // Add to active typing seconds if WPM > 0
+                    if (wpm > 0)
+                    {
+                        _totalActiveTypingSeconds += 60;
+                    }
+                }
+
+                // Reset burst counter for next minute
+                _currentBurstKeystrokes = 0;
+            }
         }
 
         private async void SendMouseKeyboardData(object state)
         {
             if (!_isTracking || _currentSessionId == 0 || _isTrackingPaused) return;
 
-            int clicks = Interlocked.Exchange(ref _totalMouseClicks, 0);
-            int movements = Interlocked.Exchange(ref _totalMouseMovements, 0);
-            int keystrokes = Interlocked.Exchange(ref _totalKeystrokes, 0);
+            int leftClicks = Interlocked.Exchange(ref _totalLeftClicks, 0);
+            int rightClicks = Interlocked.Exchange(ref _totalRightClicks, 0);
+            int middleClicks = Interlocked.Exchange(ref _totalMiddleClicks, 0);
+            int doubleClicks = Interlocked.Exchange(ref _totalDoubleClicks, 0);
+            int scrollEvents = Interlocked.Exchange(ref _totalScrollEvents, 0);
+            long distancePixels = Interlocked.Read(ref _totalMouseDistance);
+            Interlocked.Exchange(ref _totalMouseDistance, 0);
 
-            await SendMouseActivityAsync(clicks, movements);
-            await SendKeyboardActivityAsync(keystrokes);
+            int keystrokes = Interlocked.Exchange(ref _totalKeystrokes, 0);
+            int specialKeyCount = Interlocked.Exchange(ref _totalSpecialKeyCount, 0);
+            int typingBursts = Interlocked.Exchange(ref _typingBursts, 0);
+            int activeTypingSeconds = Interlocked.Exchange(ref _totalActiveTypingSeconds, 0);
+
+            int avgWpm = 0;
+            int peakWpm = 0;
+
+            lock (_wpmLock)
+            {
+                if (_wpmMeasurements.Count > 0)
+                {
+                    avgWpm = (int)_wpmMeasurements.Average();
+                }
+                peakWpm = _peakWpm;
+
+                // Reset WPM measurements for next interval
+                _wpmMeasurements.Clear();
+                _peakWpm = 0;
+            }
+
+            await SendMouseActivityAsync(leftClicks, rightClicks, middleClicks, doubleClicks, scrollEvents, distancePixels);
+            await SendKeyboardActivityAsync(keystrokes, specialKeyCount, typingBursts, avgWpm, peakWpm, activeTypingSeconds);
         }
 
-        private async Task SendMouseActivityAsync(int clicks, int movements)
+        private async Task SendMouseActivityAsync(int leftClicks, int rightClicks, int middleClicks, int doubleClicks, int scrollEvents, long distancePixels)
         {
             if (!_isTracking || _currentSessionId == 0) return;
-            if (clicks == 0 && movements == 0) return;
+
+            int totalClicks = leftClicks + rightClicks + middleClicks;
+            if (totalClicks == 0 && scrollEvents == 0 && distancePixels == 0) return;
 
             try
             {
@@ -881,18 +1013,18 @@ namespace monitor_desktop.Services
                     SessionId = _currentSessionId,
                     RecordedAt = DateTime.Now,
                     IntervalSeconds = _mouseKeyboardSendIntervalMinutes * 60,
-                    TotalClicks = clicks,
-                    LeftClicks = clicks,
-                    RightClicks = 0,
-                    MiddleClicks = 0,
-                    DoubleClicks = 0,
-                    ScrollEvents = 0,
-                    DistancePixels = 0
+                    TotalClicks = totalClicks,
+                    LeftClicks = leftClicks,
+                    RightClicks = rightClicks,
+                    MiddleClicks = middleClicks,
+                    DoubleClicks = doubleClicks,
+                    ScrollEvents = scrollEvents,
+                    DistancePixels = distancePixels
                 };
 
                 var response = await _trackingService.SaveMouseActivity(request);
                 if (response.Status == 200 || response.Status == 201)
-                    AddDebugLog($"✓ Mouse sent: {clicks} clicks");
+                    AddDebugLog($"✓ Mouse sent: L:{leftClicks} R:{rightClicks} M:{middleClicks} D:{doubleClicks} Scr:{scrollEvents} Dist:{distancePixels}px");
             }
             catch (Exception ex)
             {
@@ -900,10 +1032,10 @@ namespace monitor_desktop.Services
             }
         }
 
-        private async Task SendKeyboardActivityAsync(int keystrokes)
+        private async Task SendKeyboardActivityAsync(int keystrokes, int specialKeyCount, int typingBursts, int avgWpm, int peakWpm, int activeTypingSeconds)
         {
             if (!_isTracking || _currentSessionId == 0) return;
-            if (keystrokes == 0) return;
+            if (keystrokes == 0 && specialKeyCount == 0) return;
 
             try
             {
@@ -913,16 +1045,16 @@ namespace monitor_desktop.Services
                     RecordedAt = DateTime.Now,
                     IntervalSeconds = _mouseKeyboardSendIntervalMinutes * 60,
                     TotalKeystrokes = keystrokes,
-                    SpecialKeyCount = 0,
-                    TypingBursts = 0,
-                    AvgWpm = 0,
-                    PeakWpm = 0,
-                    ActiveTypingSeconds = 0
+                    SpecialKeyCount = specialKeyCount,
+                    TypingBursts = typingBursts,
+                    AvgWpm = avgWpm,
+                    PeakWpm = peakWpm,
+                    ActiveTypingSeconds = activeTypingSeconds
                 };
 
                 var response = await _trackingService.SaveKeyboardActivity(request);
                 if (response.Status == 200 || response.Status == 201)
-                    AddDebugLog($"✓ Keyboard sent: {keystrokes} keystrokes");
+                    AddDebugLog($"✓ Keyboard sent: K:{keystrokes} Special:{specialKeyCount} Bursts:{typingBursts} WPM:{avgWpm}/{peakWpm} Active:{activeTypingSeconds}s");
             }
             catch (Exception ex)
             {
@@ -938,31 +1070,165 @@ namespace monitor_desktop.Services
         {
             if (nCode >= 0 && wParam == (IntPtr)WM_KEYDOWN)
             {
-                if (!_isTrackingPaused) Interlocked.Increment(ref _totalKeystrokes);
+                if (!_isTrackingPaused)
+                {
+                    // Get the key information
+                    int vkCode = Marshal.ReadInt32(lParam);
+
+                    // Check if it's a special key
+                    if (IsSpecialKey(vkCode))
+                    {
+                        Interlocked.Increment(ref _totalSpecialKeyCount);
+                    }
+
+                    Interlocked.Increment(ref _totalKeystrokes);
+                    Interlocked.Increment(ref _currentBurstKeystrokes);
+
+                    // Update last keystroke time for burst detection
+                    _lastKeystrokeTime = DateTime.Now;
+                }
                 ResetIdleState();
             }
             return CallNextHookEx(_keyboardHookId, nCode, wParam, lParam);
+        }
+
+        private bool IsSpecialKey(int vkCode)
+        {
+            // Define special keys (modifiers, navigation, function keys, etc.)
+            HashSet<int> specialKeys = new HashSet<int>
+            {
+                // Modifiers
+                0x10, // Shift
+                0x11, // Ctrl
+                0x12, // Alt
+                0x5B, // Left Windows
+                0x5C, // Right Windows
+                
+                // Navigation
+                0x21, // Page Up
+                0x22, // Page Down
+                0x23, // End
+                0x24, // Home
+                0x25, // Left Arrow
+                0x26, // Up Arrow
+                0x27, // Right Arrow
+                0x28, // Down Arrow
+                
+                // Editing
+                0x2E, // Delete
+                0x08, // Backspace
+                0x0D, // Enter
+                0x1B, // Escape
+                0x09, // Tab
+                
+                // Function keys
+                0x70, // F1
+                0x71, // F2
+                0x72, // F3
+                0x73, // F4
+                0x74, // F5
+                0x75, // F6
+                0x76, // F7
+                0x77, // F8
+                0x78, // F9
+                0x79, // F10
+                0x7A, // F11
+                0x7B, // F12
+                
+                // Other
+                0x14, // Caps Lock
+                0x90, // Num Lock
+                0x91, // Scroll Lock
+                0x2C, // Print Screen
+                0x13, // Pause
+                
+                // Media keys (common codes)
+                0xAE, // Volume down
+                0xAF, // Volume up
+                0xAD, // Mute
+                0xB3, // Next track
+                0xB1, // Previous track
+                0xB0, // Play/Pause
+            };
+
+            return specialKeys.Contains(vkCode);
         }
 
         private IntPtr MouseHookCallback(int nCode, IntPtr wParam, IntPtr lParam)
         {
             if (nCode >= 0)
             {
-                switch ((int)wParam)
+                if (!_isTrackingPaused)
                 {
-                    case WM_LBUTTONDOWN:
-                    case WM_RBUTTONDOWN:
-                    case WM_MBUTTONDOWN:
-                        if (!_isTrackingPaused) Interlocked.Increment(ref _totalMouseClicks);
-                        ResetIdleState();
-                        break;
-                    case WM_MOUSEMOVE:
-                        if (!_isTrackingPaused) Interlocked.Increment(ref _totalMouseMovements);
-                        ResetIdleState();
-                        break;
+                    switch ((int)wParam)
+                    {
+                        case WM_LBUTTONDOWN:
+                            Interlocked.Increment(ref _totalLeftClicks);
+                            ResetIdleState();
+                            break;
+
+                        case WM_RBUTTONDOWN:
+                            Interlocked.Increment(ref _totalRightClicks);
+                            ResetIdleState();
+                            break;
+
+                        case WM_MBUTTONDOWN:
+                            Interlocked.Increment(ref _totalMiddleClicks);
+                            ResetIdleState();
+                            break;
+
+                        case WM_LBUTTONDBLCLK:
+                            Interlocked.Increment(ref _totalDoubleClicks);
+                            ResetIdleState();
+                            break;
+
+                        case WM_MOUSEWHEEL:
+                            Interlocked.Increment(ref _totalScrollEvents);
+                            _lastScrollTime = DateTime.Now;
+                            ResetIdleState();
+                            break;
+
+                        case WM_MOUSEMOVE:
+                            // Calculate mouse movement distance
+                            if (_lastMousePosition.X != 0 && _lastMousePosition.Y != 0)
+                            {
+                                MSLLHOOKSTRUCT hookStruct = (MSLLHOOKSTRUCT)Marshal.PtrToStructure(lParam, typeof(MSLLHOOKSTRUCT));
+                                Point currentPos = new Point(hookStruct.pt.x, hookStruct.pt.y);
+                                double distance = Math.Sqrt(
+                                    Math.Pow(currentPos.X - _lastMousePosition.X, 2) +
+                                    Math.Pow(currentPos.Y - _lastMousePosition.Y, 2)
+                                );
+                                Interlocked.Add(ref _totalMouseDistance, (long)distance);
+                                _lastMousePosition = currentPos;
+                            }
+                            else
+                            {
+                                MSLLHOOKSTRUCT hookStruct = (MSLLHOOKSTRUCT)Marshal.PtrToStructure(lParam, typeof(MSLLHOOKSTRUCT));
+                                _lastMousePosition = new Point(hookStruct.pt.x, hookStruct.pt.y);
+                            }
+                            ResetIdleState();
+                            break;
+                    }
                 }
             }
             return CallNextHookEx(_mouseHookId, nCode, wParam, lParam);
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct POINT
+        {
+            public int x;
+            public int y;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct MSLLHOOKSTRUCT
+        {
+            public POINT pt;
+            public uint mouseData;
+            public uint flags;
+            public uint time;
+            public IntPtr dwExtraInfo;
         }
 
         #endregion
@@ -988,9 +1254,23 @@ namespace monitor_desktop.Services
                 _isBrowserTrackingPaused = false;
                 _isUrlTrackingPaused = false;
 
-                _totalMouseClicks = 0;
-                _totalMouseMovements = 0;
+                // Reset mouse counters
+                _totalLeftClicks = 0;
+                _totalRightClicks = 0;
+                _totalMiddleClicks = 0;
+                _totalDoubleClicks = 0;
+                _totalScrollEvents = 0;
+                _totalMouseDistance = 0;
+                _lastMousePosition = new Point(0, 0);
+
+                // Reset keyboard counters
                 _totalKeystrokes = 0;
+                _totalSpecialKeyCount = 0;
+                _typingBursts = 0;
+                _currentBurstKeystrokes = 0;
+                _totalActiveTypingSeconds = 0;
+                _wpmMeasurements.Clear();
+                _peakWpm = 0;
 
                 _currentAppName = null;
                 _currentBrowserName = null;
@@ -998,6 +1278,8 @@ namespace monitor_desktop.Services
                 _currentUrl = null;
                 _isBrowserActive = false;
                 _pendingUrlVisits.Clear();
+
+                _screenshotCaptureService?.StartPolling(sessionId);
             }
 
             _keyboardProc = KeyboardHookCallback;
@@ -1035,20 +1317,48 @@ namespace monitor_desktop.Services
         public async Task StopTrackingAsync(bool sendFinalData = true)
         {
             AddDebugLog($"=== STOP TRACKING ===");
-
+            _screenshotCaptureService?.StopPolling();
             if (!_isTracking) return;
 
             if (sendFinalData && !_isTrackingPaused)
             {
-                if (!string.IsNullOrEmpty(_currentAppName)) SendApplicationUsageAndReset();
-                if (_isBrowserActive) await SaveCurrentBrowserAndPendingUrls();
+                // Send current application
+                if (!string.IsNullOrEmpty(_currentAppName))
+                    SendApplicationUsageAndReset();
 
-                int clicks = Interlocked.Exchange(ref _totalMouseClicks, 0);
-                int movements = Interlocked.Exchange(ref _totalMouseMovements, 0);
+                // Send browser usage and any pending/final URLs
+                if (_isBrowserActive)
+                    await SaveCurrentBrowserAndPendingUrls();
+
+                // Send final mouse data with all counters
+                int leftClicks = Interlocked.Exchange(ref _totalLeftClicks, 0);
+                int rightClicks = Interlocked.Exchange(ref _totalRightClicks, 0);
+                int middleClicks = Interlocked.Exchange(ref _totalMiddleClicks, 0);
+                int doubleClicks = Interlocked.Exchange(ref _totalDoubleClicks, 0);
+                int scrollEvents = Interlocked.Exchange(ref _totalScrollEvents, 0);
+                long distancePixels = Interlocked.Read(ref _totalMouseDistance);
+                Interlocked.Exchange(ref _totalMouseDistance, 0);
+
+                // Send final keyboard data with all counters
                 int keystrokes = Interlocked.Exchange(ref _totalKeystrokes, 0);
+                int specialKeyCount = Interlocked.Exchange(ref _totalSpecialKeyCount, 0);
+                int typingBursts = Interlocked.Exchange(ref _typingBursts, 0);
+                int activeTypingSeconds = Interlocked.Exchange(ref _totalActiveTypingSeconds, 0);
 
-                await SendMouseActivityAsync(clicks, movements);
-                await SendKeyboardActivityAsync(keystrokes);
+                int avgWpm = 0;
+                int peakWpm = 0;
+
+                lock (_wpmLock)
+                {
+                    if (_wpmMeasurements.Count > 0)
+                    {
+                        avgWpm = (int)_wpmMeasurements.Average();
+                    }
+                    peakWpm = _peakWpm;
+                }
+
+                await SendMouseActivityAsync(leftClicks, rightClicks, middleClicks, doubleClicks, scrollEvents, distancePixels);
+                await SendKeyboardActivityAsync(keystrokes, specialKeyCount, typingBursts, avgWpm, peakWpm, activeTypingSeconds);
             }
 
             if (_isIdle)
@@ -1094,6 +1404,8 @@ namespace monitor_desktop.Services
         public void Dispose()
         {
             if (_isDisposed) return;
+            _screenshotCaptureService?.Dispose();
+            _screenshotCaptureService = null;
             SystemEvents.PowerModeChanged -= OnPowerModeChanged;
             SystemEvents.SessionSwitch -= OnSessionSwitch;
             _isDisposed = true;

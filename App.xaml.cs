@@ -8,6 +8,7 @@ namespace monitor_desktop
     {
         private readonly TokenManager _tokenManager;
         private static Mutex _appMutex;
+        private AutoUpdateService _updateService;
 
         public App()
         {
@@ -25,6 +26,12 @@ namespace monitor_desktop
                 return;
             }
 
+            _updateService = new AutoUpdateService();
+            _updateService.StartBackgroundChecking();
+
+            var versionManager = new VersionManager();
+            versionManager.CleanupOldUpdates();
+
             if (_tokenManager.IsAuthenticated)
             {
                 var dashboard = new DashboardWindow();
@@ -39,6 +46,8 @@ namespace monitor_desktop
 
         protected override void OnExit(ExitEventArgs e)
         {
+            _updateService?.Dispose();
+
             var tracker = ActivityTrackerService.GetExistingInstance();
             if (tracker != null && tracker.IsTracking)
             {

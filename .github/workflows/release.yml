@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - master
+    tags:
+      - 'v*'  # Also trigger on tag pushes
 
 jobs:
   release:
@@ -24,13 +26,31 @@ jobs:
           dotnet-version: '10.0.x'
           dotnet-quality: 'preview'
 
-      - name: Generate version
+      - name: Get version from tag or commit count
         id: version
         run: |
-          $count = (git rev-list --count HEAD)
-          $version = "1.0.$count"
-          echo "VERSION=$version" >> $env:GITHUB_OUTPUT
-      - name: Publish
+          $tag = git describe --tags --abbrev=0 2>$null
+          if ($tag) {
+            $version = $tag.TrimStart('v')
+            echo "VERSION=$version" >> $env:GITHUB_OUTPUT
+            echo "TAG_EXISTS=true" >> $env:GITHUB_OUTPUT
+          } else {
+            $count = (git rev-list --count HEAD)
+            $version = "1.0.$count"
+            echo "VERSION=$version" >> $env:GITHUB_OUTPUT
+            echo "TAG_EXISTS=false" >> $env:GITHUB_OUTPUT
+          }
+
+      - name: Update Assembly Version
+        run: |
+          $version = "${{ steps.version.outputs.VERSION }}"
+          $csprojPath = "monitor_desktop.csproj"
+          $content = Get-Content $csprojPath -Raw
+          $content = $content -replace '<Version>.*?</Version>', '<Version>$version</Version>'
+          $content = $content -replace '<FileVersion>.*?</FileVersion>', '<FileVersion>$version</FileVersion>'
+          Set-Content $csprojPath $content
+
+      - name: Build and Publish
         run: |
           dotnet publish monitor_desktop.csproj `
             -c Release `
@@ -38,18 +58,24 @@ jobs:
             --self-contained true `
             -p:PublishSingleFile=true `
             -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:DebugType=none `
+            -p:DebugSymbols=false `
             -o publish/
-      - name: Zip output
+
+      - name: Create ZIP Archive
         run: |
           Compress-Archive `
             -Path publish/* `
-            -DestinationPath "monitor_desktop-v${{ steps.version.outputs.VERSION }}.zip"
-      - name: Create GitHub Release
+            -DestinationPath "WorkPulse-v${{ steps.version.outputs.VERSION }}.zip"
+
+      - name: Create or Update Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: "v${{ steps.version.outputs.VERSION }}"
-          name: "Release v${{ steps.version.outputs.VERSION }}"
-          files: "monitor_desktop-v${{ steps.version.outputs.VERSION }}.zip"
+          name: "WorkPulse v${{ steps.version.outputs.VERSION }}"
+          files: "WorkPulse-v${{ steps.version.outputs.VERSION }}.zip"
           generate_release_notes: true
+          draft: false
+          prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

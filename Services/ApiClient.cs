@@ -1,10 +1,11 @@
 ﻿
+using monitor_desktop.Converters;
+using monitor_desktop.Models;
+using System.Diagnostics;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
-using monitor_desktop.Converters;
-using monitor_desktop.Models;
 
 namespace monitor_desktop.Services
 {
@@ -96,12 +97,17 @@ namespace monitor_desktop.Services
         {
             var content = await response.Content.ReadAsStringAsync();
 
+            // Log the raw response for debugging
+            Debug.WriteLine($"Response Status: {response.StatusCode}");
+            Debug.WriteLine($"Response Content: {content}");
+
             try
             {
                 if (!string.IsNullOrEmpty(content))
                 {
-                    var backendResponse = JsonSerializer.Deserialize<BackendApiResponse<T>>(content, _jsonOptions);
-                    if (backendResponse != null && backendResponse.Data != null)
+                    // Try to deserialize as ApiResponse<T>
+                    var backendResponse = JsonSerializer.Deserialize<ApiResponse<T>>(content, _jsonOptions);
+                    if (backendResponse != null)
                     {
                         return new ApiResponse<T>
                         {
@@ -111,6 +117,7 @@ namespace monitor_desktop.Services
                         };
                     }
 
+                    // If that fails, try to deserialize as just T
                     var directData = JsonSerializer.Deserialize<T>(content, _jsonOptions);
                     if (directData != null)
                     {
@@ -121,10 +128,24 @@ namespace monitor_desktop.Services
                             Data = directData
                         };
                     }
+
+                    // If we can't deserialize to T, but have content, return error with content
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        return new ApiResponse<T>
+                        {
+                            Status = (int)response.StatusCode,
+                            Message = $"Server error: {content}",
+                            Data = default
+                        };
+                    }
                 }
             }
             catch (JsonException ex)
             {
+                Debug.WriteLine($"JSON Parse Error: {ex.Message}");
+                Debug.WriteLine($"Raw content: {content}");
+
                 return new ApiResponse<T>
                 {
                     Status = (int)response.StatusCode,

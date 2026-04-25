@@ -9,7 +9,7 @@
         WindowStyle="None"
         AllowsTransparency="True"
         Background="Transparent"
-        ResizeMode="NoResize">
+        ResizeMode="CanResize">
 
     <Window.Resources>
         <SolidColorBrush x:Key="PageBg" Color="#F5F7FA"/>
@@ -63,14 +63,32 @@
             </Setter>
         </Style>
 
-        <Style x:Key="TitleBarBtn" TargetType="Button">
+        <!-- Window Control Buttons Style -->
+        <Style x:Key="WindowControlButton" TargetType="Button">
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
-            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontSize" Value="12"/>
             <Setter Property="Width" Value="30"/>
             <Setter Property="Height" Value="30"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="Transparent" CornerRadius="6">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#E2E8F0"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="CloseWindowButton" TargetType="Button" BasedOn="{StaticResource WindowControlButton}">
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
@@ -112,19 +130,27 @@
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
 
+                    <!-- Window Controls (Left side) -->
                     <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                        <Ellipse Width="11" Height="11" Fill="#FC5F57" Margin="0,0,6,0"/>
-                        <Ellipse Width="11" Height="11" Fill="#FDBC40" Margin="0,0,6,0"/>
-                        <Ellipse Width="11" Height="11" Fill="#33C748"/>
+                        <Button x:Name="MinimizeButton" Content="─" Style="{StaticResource WindowControlButton}" Click="MinimizeButton_Click" Margin="0,0,4,0"/>
+                        <Button x:Name="MaximizeButton" Content="□" Style="{StaticResource WindowControlButton}" Click="MaximizeButton_Click" Margin="0,0,4,0"/>
+                        <Button x:Name="CloseButton" Content="✕" Style="{StaticResource CloseWindowButton}" Click="CloseButton_Click"/>
                     </StackPanel>
 
-                    <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="50,0,0,0">
+                    <!-- App Title -->
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="120,0,0,0">
                         <TextBlock Text="WorkPulse" FontSize="15" FontWeight="Bold" Foreground="{StaticResource TextDark}" VerticalAlignment="Center"/>
                     </StackPanel>
 
+                    <!-- Center: Current Time -->
                     <TextBlock Grid.Column="1" Text="{Binding CurrentTime}" FontSize="13" Foreground="{StaticResource TextSub}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
 
+                    <!-- Right Side: User Info & Actions -->
                     <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button Content="Check for Updates" Click="CheckForUpdates_Click"
+                                FontSize="12" Padding="12,6" Margin="0,0,10,0"
+                                Background="Transparent" BorderBrush="#E2E8F0" BorderThickness="1"
+                                Cursor="Hand" Foreground="{StaticResource TextSub}"/>
                         <TextBlock Text="{Binding WelcomeMessage}" FontSize="13" Foreground="{StaticResource TextSub}" VerticalAlignment="Center" Margin="0,0,16,0"/>
                         <Button Content="Logout" Click="Logout_Click" Style="{StaticResource LogoutButton}" Margin="0,0,10,0"/>
                     </StackPanel>
