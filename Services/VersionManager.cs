@@ -87,50 +87,73 @@ namespace monitor_desktop.Services
             try
             {
                 var currentVersion = GetCurrentVersion();
+
                 var response = await _httpClient.GetAsync(GITHUB_API_URL);
 
                 if (!response.IsSuccessStatusCode)
                 {
-                    Debug.WriteLine($"GitHub API error: {response.StatusCode}");
                     return new UpdateInfo { HasUpdate = false };
                 }
 
                 var json = await response.Content.ReadAsStringAsync();
+
                 using var doc = JsonDocument.Parse(json);
                 var root = doc.RootElement;
 
-                var latestTag = root.GetProperty("tag_name").GetString();
-                var latestVersion = ParseVersionFromTag(latestTag);
-                var releaseUrl = root.GetProperty("html_url").GetString();
-                var releaseNotes = root.GetProperty("body").GetString();
-                var releaseDate = root.GetProperty("published_at").GetDateTime();
+                var tagNameElement = root.GetProperty("tag_name");
+                var latestTag = tagNameElement.GetString();
 
-                // Find the asset URL for the zip file
+                if (string.IsNullOrEmpty(latestTag))
+                {
+                    return new UpdateInfo { HasUpdate = false };
+                }
+
+                var latestVersion = ParseVersionFromTag(latestTag);
+
+                string releaseUrl = null;
+                if (root.TryGetProperty("html_url", out var htmlUrlElement))
+                {
+                    releaseUrl = htmlUrlElement.GetString();
+                }
+                string releaseNotes = null;
+                if (root.TryGetProperty("body", out var bodyElement))
+                {
+                    releaseNotes = bodyElement.GetString();
+                }
+                DateTime releaseDate = DateTime.Now;
+                if (root.TryGetProperty("published_at", out var publishedAtElement))
+                {
+                    if (DateTime.TryParse(publishedAtElement.GetString(), out var parsedDate))
+                    {
+                        releaseDate = parsedDate;
+                    }
+                }
                 string downloadUrl = null;
                 if (root.TryGetProperty("assets", out var assets))
                 {
                     foreach (var asset in assets.EnumerateArray())
                     {
-                        var name = asset.GetProperty("name").GetString();
-                        if (name != null && name.EndsWith(".zip"))
+                        if (asset.TryGetProperty("name", out var nameElement))
                         {
-                            downloadUrl = asset.GetProperty("browser_download_url").GetString();
-                            break;
+                            var name = nameElement.GetString();
+                            if (name != null && name.EndsWith(".zip"))
+                            {
+                                if (asset.TryGetProperty("browser_download_url", out var downloadUrlElement))
+                                {
+                                    downloadUrl = downloadUrlElement.GetString();
+                                    break;
+                                }
+                            }
                         }
                     }
                 }
-
-                // If no asset found, try to construct from release URL
-                if (string.IsNullOrEmpty(downloadUrl))
+                if (string.IsNullOrEmpty(downloadUrl) && !string.IsNullOrEmpty(releaseUrl))
                 {
                     downloadUrl = $"{releaseUrl}/download/{latestTag}/WorkPulse-{latestTag}.zip";
                 }
 
                 var hasUpdate = latestVersion > currentVersion;
-
-                Debug.WriteLine($"Current: {currentVersion}, Latest: {latestVersion}, HasUpdate: {hasUpdate}");
-
-                return new UpdateInfo
+                var updateInfo = new UpdateInfo
                 {
                     HasUpdate = hasUpdate,
                     CurrentVersion = new VersionInfo
@@ -141,20 +164,28 @@ namespace monitor_desktop.Services
                         ReleaseDate = DateTime.Now,
                         IsMandatory = false
                     },
-                    LatestVersion = new VersionInfo
+                    LatestVersion = hasUpdate ? new VersionInfo
                     {
                         Version = latestVersion.ToString(),
-                        ReleaseUrl = downloadUrl,
+                        ReleaseUrl = downloadUrl ?? releaseUrl,
                         ReleaseNotes = releaseNotes ?? "No release notes available.",
                         ReleaseDate = releaseDate,
                         IsMandatory = IsMajorUpdate(currentVersion, latestVersion)
-                    }
+                    } : null
                 };
+
+                return updateInfo;
+            }
+            catch (HttpRequestException ex)
+            {
+                return new UpdateInfo { HasUpdate = false };
+            }
+            catch (JsonException ex)
+            {
+                return new UpdateInfo { HasUpdate = false };
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"Error checking for updates: {ex.Message}");
-                Debug.WriteLine($"Stack trace: {ex.StackTrace}");
                 return new UpdateInfo { HasUpdate = false };
             }
         }
