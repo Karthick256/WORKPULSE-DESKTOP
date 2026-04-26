@@ -102,8 +102,22 @@ namespace monitor_desktop.Services
 
             try
             {
+
                 var updateInfo = await _versionManager.CheckForUpdatesAsync();
-                if (updateInfo.HasUpdate)
+                if (updateInfo == null)
+                {
+                    if (!silent)
+                    {
+                        await Application.Current.Dispatcher.InvokeAsync(() =>
+                        {
+                            MessageBox.Show("Unable to check for updates. Please try again later.",
+                                "Update Check Failed", MessageBoxButton.OK, MessageBoxImage.Warning);
+                        });
+                    }
+                    return;
+                }
+
+                if (updateInfo.HasUpdate && updateInfo.LatestVersion != null)
                 {
                     _lastCheckTime = DateTime.Now;
                     SaveSettings();
@@ -117,10 +131,11 @@ namespace monitor_desktop.Services
                 }
                 else if (!silent)
                 {
+                    var currentVersion = updateInfo.CurrentVersion?.Version ?? "unknown";
                     await Application.Current.Dispatcher.InvokeAsync(() =>
                     {
                         MessageBox.Show(
-                            $"You are running the latest version of WorkPulse (v{updateInfo.CurrentVersion.Version}).",
+                            $"You are running the latest version of WorkPulse (v{currentVersion}).",
                             "No Updates Available",
                             MessageBoxButton.OK,
                             MessageBoxImage.Information);
