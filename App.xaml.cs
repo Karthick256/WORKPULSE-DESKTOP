@@ -18,10 +18,17 @@ namespace monitor_desktop
         protected override void OnStartup(StartupEventArgs e)
         {
             base.OnStartup(e);
-            _appMutex = new Mutex(true, "WorkPulse_Application", out bool isNewInstance);
+            bool createdNew;
+            _appMutex = new Mutex(true, "WorkPulse_Application", out createdNew);
 
-            if (!isNewInstance)
+            if (!createdNew)
             {
+                var existingWindow = Application.Current.Windows.OfType<Window>().FirstOrDefault();
+                if (existingWindow != null)
+                {
+                    existingWindow.WindowState = WindowState.Normal;
+                    existingWindow.Activate();
+                }
                 Current.Shutdown();
                 return;
             }

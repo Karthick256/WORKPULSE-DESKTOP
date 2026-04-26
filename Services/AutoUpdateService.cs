@@ -86,34 +86,33 @@ namespace monitor_desktop.Services
         public async Task CheckForUpdatesAsync(bool silent = true)
         {
             if (_isChecking)
+            {
+                if (!silent)
+                {
+                    await Application.Current.Dispatcher.InvokeAsync(() =>
+                    {
+                        MessageBox.Show("Already checking for updates. Please wait...",
+                            "Update Check", MessageBoxButton.OK, MessageBoxImage.Information);
+                    });
+                }
                 return;
-
-            if (!silent && _nextReminderTime > DateTime.Now)
-                return;
+            }
 
             _isChecking = true;
 
             try
             {
                 var updateInfo = await _versionManager.CheckForUpdatesAsync();
-
                 if (updateInfo.HasUpdate)
                 {
                     _lastCheckTime = DateTime.Now;
                     SaveSettings();
 
-                    UpdateFound?.Invoke(this, updateInfo);
-
                     await Application.Current.Dispatcher.InvokeAsync(() =>
                     {
                         var dialog = new UpdateDialog(updateInfo);
-                        var result = dialog.ShowDialog();
-
-                        if (result == false && !updateInfo.LatestVersion.IsMandatory)
-                        {
-                            _nextReminderTime = DateTime.Now.AddHours(REMINDER_DELAY_HOURS);
-                            SaveSettings();
-                        }
+                        dialog.Owner = Application.Current.MainWindow;
+                        dialog.ShowDialog();
                     });
                 }
                 else if (!silent)
@@ -121,7 +120,7 @@ namespace monitor_desktop.Services
                     await Application.Current.Dispatcher.InvokeAsync(() =>
                     {
                         MessageBox.Show(
-                            "You are running the latest version of WorkPulse.",
+                            $"You are running the latest version of WorkPulse (v{updateInfo.CurrentVersion.Version}).",
                             "No Updates Available",
                             MessageBoxButton.OK,
                             MessageBoxImage.Information);
@@ -130,13 +129,12 @@ namespace monitor_desktop.Services
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"Update check failed: {ex.Message}");
                 if (!silent)
                 {
                     await Application.Current.Dispatcher.InvokeAsync(() =>
                     {
                         MessageBox.Show(
-                            $"Failed to check for updates: {ex.Message}\n\nPlease check your internet connection.",
+                            $"Failed to check for updates: {ex.Message}\n\nPlease check your internet connection and try again.",
                             "Update Check Failed",
                             MessageBoxButton.OK,
                             MessageBoxImage.Warning);

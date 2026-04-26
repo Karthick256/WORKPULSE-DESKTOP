@@ -39,12 +39,26 @@ namespace monitor_desktop.Views
                 DragMove();
         }
 
-        private async void CheckForUpdates_Click(object sender, RoutedEventArgs e)
+        private void CheckForUpdates_Click(object sender, RoutedEventArgs e)
         {
-            if (_updateService != null)
+            Task.Run(async () =>
             {
-                await _updateService.CheckForUpdatesAsync(silent: false);
-            }
+                await Application.Current.Dispatcher.InvokeAsync(async () =>
+                {
+                    try
+                    {
+                        using (var updateService = new AutoUpdateService())
+                        {
+                            await updateService.CheckForUpdatesAsync(silent: false);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show($"Error checking for updates: {ex.Message}",
+                            "Update Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    }
+                });
+            });
         }
 
         private void MinimizeButton_Click(object sender, RoutedEventArgs e)

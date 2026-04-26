@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics;
 using System.IO;
+using System.IO.Compression;
 using System.Net.Http;
 using System.Reflection;
 using System.Text.Json;
@@ -49,6 +50,7 @@ namespace monitor_desktop.Services
         {
             _httpClient = new HttpClient();
             _httpClient.DefaultRequestHeaders.Add("User-Agent", "WorkPulse-AutoUpdater");
+            _httpClient.Timeout = TimeSpan.FromMinutes(5);
 
             if (!Directory.Exists(UpdateFolder))
                 Directory.CreateDirectory(UpdateFolder);
@@ -75,7 +77,9 @@ namespace monitor_desktop.Services
                 catch { }
             }
 
-            return new Version(fileVersionInfo.FileVersion ?? "1.0.0");
+            var version = new Version(fileVersionInfo.FileVersion ?? "1.0.0");
+            SaveVersionInfo(version.ToString());
+            return version;
         }
 
         public async Task<UpdateInfo> CheckForUpdatesAsync()
@@ -87,6 +91,7 @@ namespace monitor_desktop.Services
 
                 if (!response.IsSuccessStatusCode)
                 {
+                    Debug.WriteLine($"GitHub API error: {response.StatusCode}");
                     return new UpdateInfo { HasUpdate = false };
                 }
 
@@ -100,19 +105,30 @@ namespace monitor_desktop.Services
                 var releaseNotes = root.GetProperty("body").GetString();
                 var releaseDate = root.GetProperty("published_at").GetDateTime();
 
-                var assets = root.GetProperty("assets");
+                // Find the asset URL for the zip file
                 string downloadUrl = null;
-                foreach (var asset in assets.EnumerateArray())
+                if (root.TryGetProperty("assets", out var assets))
                 {
-                    var name = asset.GetProperty("name").GetString();
-                    if (name != null && name.EndsWith(".zip"))
+                    foreach (var asset in assets.EnumerateArray())
                     {
-                        downloadUrl = asset.GetProperty("browser_download_url").GetString();
-                        break;
+                        var name = asset.GetProperty("name").GetString();
+                        if (name != null && name.EndsWith(".zip"))
+                        {
+                            downloadUrl = asset.GetProperty("browser_download_url").GetString();
+                            break;
+                        }
                     }
                 }
 
+                // If no asset found, try to construct from release URL
+                if (string.IsNullOrEmpty(downloadUrl))
+                {
+                    downloadUrl = $"{releaseUrl}/download/{latestTag}/WorkPulse-{latestTag}.zip";
+                }
+
                 var hasUpdate = latestVersion > currentVersion;
+
+                Debug.WriteLine($"Current: {currentVersion}, Latest: {latestVersion}, HasUpdate: {hasUpdate}");
 
                 return new UpdateInfo
                 {
@@ -129,7 +145,7 @@ namespace monitor_desktop.Services
                     {
                         Version = latestVersion.ToString(),
                         ReleaseUrl = downloadUrl,
-                        ReleaseNotes = releaseNotes,
+                        ReleaseNotes = releaseNotes ?? "No release notes available.",
                         ReleaseDate = releaseDate,
                         IsMandatory = IsMajorUpdate(currentVersion, latestVersion)
                     }
@@ -138,12 +154,15 @@ namespace monitor_desktop.Services
             catch (Exception ex)
             {
                 Debug.WriteLine($"Error checking for updates: {ex.Message}");
+                Debug.WriteLine($"Stack trace: {ex.StackTrace}");
                 return new UpdateInfo { HasUpdate = false };
             }
         }
 
         private Version ParseVersionFromTag(string tag)
         {
+            if (string.IsNullOrEmpty(tag)) return new Version(1, 0, 0);
+
             if (tag.StartsWith("v"))
                 tag = tag.Substring(1);
 
@@ -164,14 +183,25 @@ namespace monitor_desktop.Services
             try
             {
                 if (string.IsNullOrEmpty(updateInfo?.ReleaseUrl))
+                {
+                    Debug.WriteLine("No download URL available");
                     return false;
+                }
 
-                var zipPath = Path.Combine(UpdateFolder, $"update_{updateInfo.Version}.zip");
-                var extractPath = Path.Combine(UpdateFolder, $"extracted_{updateInfo.Version}");
+                progress?.Report(5);
+
+                var zipPath = Path.Combine(UpdateFolder, $"update_{updateInfo.Version.Replace('.', '_')}.zip");
+                var extractPath = Path.Combine(UpdateFolder, $"extracted_{updateInfo.Version.Replace('.', '_')}");
+
+                // Clean up old directories
                 if (Directory.Exists(extractPath))
                     Directory.Delete(extractPath, true);
                 Directory.CreateDirectory(extractPath);
+
                 progress?.Report(10);
+
+                // Download the update
+                Debug.WriteLine($"Downloading from: {updateInfo.ReleaseUrl}");
 
                 using (var response = await _httpClient.GetAsync(updateInfo.ReleaseUrl, HttpCompletionOption.ResponseHeadersRead))
                 {
@@ -192,91 +222,92 @@ namespace monitor_desktop.Services
 
                             if (totalBytes > 0)
                             {
-                                var percent = (int)((totalRead * 80) / totalBytes) + 10;
-                                progress?.Report(Math.Min(percent, 90));
+                                var percent = (int)((totalRead * 70) / totalBytes) + 10;
+                                progress?.Report(Math.Min(percent, 80));
                             }
                         }
                     }
                 }
 
+                progress?.Report(85);
+
+                // Extract the zip file
+                await Task.Run(() => ZipFile.ExtractToDirectory(zipPath, extractPath, true));
+
                 progress?.Report(90);
-                await Task.Run(() => System.IO.Compression.ZipFile.ExtractToDirectory(zipPath, extractPath, true));
+
+                // Create update script instead of replacing files directly
+                var scriptPath = CreateUpdateScript(extractPath, updateInfo.Version);
+
                 progress?.Report(95);
 
-                var currentExePath = Assembly.GetExecutingAssembly().Location;
-                var appDirectory = Path.GetDirectoryName(currentExePath);
-                var backupPath = Path.Combine(BackupFolder, $"backup_{DateTime.Now:yyyyMMdd_HHmmss}");
+                // Launch the update script and exit
+                var startInfo = new ProcessStartInfo
+                {
+                    FileName = scriptPath,
+                    UseShellExecute = true,
+                    CreateNoWindow = false,
+                    WindowStyle = ProcessWindowStyle.Normal
+                };
 
-                await Task.Run(() => CopyDirectory(appDirectory, backupPath));
-                progress?.Report(98);
-                await Task.Run(() => ReplaceApplicationFiles(extractPath, appDirectory));
+                Process.Start(startInfo);
+
                 progress?.Report(100);
 
+                // Save the new version info
                 SaveVersionInfo(updateInfo.Version);
-                File.Delete(zipPath);
-                Directory.Delete(extractPath, true);
 
                 return true;
             }
             catch (Exception ex)
             {
                 Debug.WriteLine($"Error during update: {ex.Message}");
+                Debug.WriteLine($"Stack trace: {ex.StackTrace}");
                 return false;
             }
         }
 
-        private void ReplaceApplicationFiles(string sourceDir, string targetDir)
+        private string CreateUpdateScript(string extractPath, string newVersion)
         {
-            var currentExe = Assembly.GetExecutingAssembly().Location;
-            var currentExeName = Path.GetFileName(currentExe);
+            var currentExePath = Assembly.GetExecutingAssembly().Location;
+            var currentExeName = Path.GetFileName(currentExePath);
+            var currentDirectory = Path.GetDirectoryName(currentExePath);
 
-            foreach (var sourceFile in Directory.GetFiles(sourceDir, "*", SearchOption.TopDirectoryOnly))
-            {
-                var fileName = Path.GetFileName(sourceFile);
-                var targetFile = Path.Combine(targetDir, fileName);
+            var scriptPath = Path.Combine(Path.GetTempPath(), $"workpulse_update_{DateTime.Now:yyyyMMddHHmmss}.bat");
 
-                if (fileName.Equals(currentExeName, StringComparison.OrdinalIgnoreCase))
-                    continue;
+            var scriptContent = $@"
+@echo off
+title WorkPulse Updater
+echo ========================================
+echo WorkPulse Updater
+echo ========================================
+echo.
+echo Updating from version {GetCurrentVersion()} to {newVersion}...
+echo.
 
-                try
-                {
-                    File.Copy(sourceFile, targetFile, true);
-                }
-                catch (Exception ex)
-                {
-                    Debug.WriteLine($"Failed to copy {fileName}: {ex.Message}");
-                }
-            }
+timeout /t 2 /nobreak > nul
 
-            foreach (var sourceSubDir in Directory.GetDirectories(sourceDir))
-            {
-                var dirName = Path.GetFileName(sourceSubDir);
-                var targetSubDir = Path.Combine(targetDir, dirName);
+echo Copying new files...
+xcopy ""{extractPath}\*"" ""{currentDirectory}\"" /E /Y /I /Q
 
-                if (!Directory.Exists(targetSubDir))
-                    Directory.CreateDirectory(targetSubDir);
+echo.
+echo Cleaning up...
+rmdir /s /q ""{extractPath}"" 2>nul
+del ""{extractPath.Replace("extracted", "update")}.zip"" 2>nul
 
-                CopyDirectory(sourceSubDir, targetSubDir);
-            }
-        }
+echo.
+echo Update complete! Starting WorkPulse...
+timeout /t 2 /nobreak > nul
 
-        private void CopyDirectory(string sourceDir, string targetDir)
-        {
-            if (!Directory.Exists(targetDir))
-                Directory.CreateDirectory(targetDir);
+start """" ""{currentExePath}""
 
-            foreach (var file in Directory.GetFiles(sourceDir))
-            {
-                var fileName = Path.GetFileName(file);
-                var targetFile = Path.Combine(targetDir, fileName);
-                File.Copy(file, targetFile, true);
-            }
+echo Exiting updater...
+timeout /t 1 /nobreak > nul
+del ""%~f0""
+";
 
-            foreach (var directory in Directory.GetDirectories(sourceDir))
-            {
-                var targetSubDir = Path.Combine(targetDir, Path.GetFileName(directory));
-                CopyDirectory(directory, targetSubDir);
-            }
+            File.WriteAllText(scriptPath, scriptContent, System.Text.Encoding.UTF8);
+            return scriptPath;
         }
 
         private void SaveVersionInfo(string version)
@@ -298,13 +329,17 @@ namespace monitor_desktop.Services
                 var updateFiles = Directory.GetFiles(UpdateFolder, "update_*.zip");
                 foreach (var file in updateFiles)
                 {
-                    File.Delete(file);
+                    var fileInfo = new FileInfo(file);
+                    if (fileInfo.CreationTime < DateTime.Now.AddDays(-7))
+                        File.Delete(file);
                 }
 
                 var extractDirs = Directory.GetDirectories(UpdateFolder, "extracted_*");
                 foreach (var dir in extractDirs)
                 {
-                    Directory.Delete(dir, true);
+                    var dirInfo = new DirectoryInfo(dir);
+                    if (dirInfo.CreationTime < DateTime.Now.AddDays(-1))
+                        Directory.Delete(dir, true);
                 }
 
                 var backups = Directory.GetDirectories(BackupFolder, "backup_*")
@@ -334,7 +369,14 @@ namespace monitor_desktop.Services
 
                 var currentExePath = Assembly.GetExecutingAssembly().Location;
                 var appDirectory = Path.GetDirectoryName(currentExePath);
-                CopyDirectory(latestBackup, appDirectory);
+
+                foreach (var file in Directory.GetFiles(latestBackup))
+                {
+                    var fileName = Path.GetFileName(file);
+                    var targetFile = Path.Combine(appDirectory, fileName);
+                    File.Copy(file, targetFile, true);
+                }
+
                 return true;
             }
             catch (Exception ex)

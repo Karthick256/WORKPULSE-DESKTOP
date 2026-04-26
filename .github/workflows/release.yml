@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - master
+      - main
     tags:
       - 'v*'
 
@@ -26,22 +27,24 @@ jobs:
           dotnet-version: '10.0.x'
           dotnet-quality: 'preview'
 
-      - name: Get version from tag or commit count
+      - name: Get latest version
         id: version
         shell: pwsh
         run: |
-          $tag = git describe --tags --abbrev=0 2>$null
-          if ($tag) {
-            $version = $tag.TrimStart('v')
-            echo "VERSION=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          # Get all existing tags
+          $tags = git tag -l "v*" | ForEach-Object { $_ -replace '^v', '' } | ForEach-Object { [Version]$_ }
+          
+          if ($tags.Count -gt 0) {
+            $latestVersion = ($tags | Measure-Object -Maximum).Maximum
+            $newVersion = "$($latestVersion.Major).$($latestVersion.Minor).$($latestVersion.Build + 1)"
+            echo "VERSION=$newVersion" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
             echo "TAG_EXISTS=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           } else {
-            $count = (git rev-list --count HEAD)
-            $version = "1.0.$count"
-            echo "VERSION=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+            $newVersion = "1.0.1"
+            echo "VERSION=$newVersion" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
             echo "TAG_EXISTS=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           }
-          Write-Host "Version: $version"
+          Write-Host "New Version: $newVersion"
 
       - name: Update csproj version
         shell: pwsh
@@ -51,26 +54,28 @@ jobs:
           
           Write-Host "Setting version to: $version"
           
-          # Read the csproj file
           $content = Get-Content $csprojPath -Raw
           
-          # Create replacement strings separately to avoid PowerShell parsing issues
           $versionTag = "<Version>$version</Version>"
           $assemblyVersionTag = "<AssemblyVersion>$version.0</AssemblyVersion>"
           $fileVersionTag = "<FileVersion>$version.0</FileVersion>"
           
-          # Replace version tags
           $content = $content -replace '<Version>.*?</Version>', $versionTag
           $content = $content -replace '<AssemblyVersion>.*?</AssemblyVersion>', $assemblyVersionTag
           $content = $content -replace '<FileVersion>.*?</FileVersion>', $fileVersionTag
           
-          # Save the updated content
           [System.IO.File]::WriteAllText($csprojPath, $content)
           
           Write-Host "Updated csproj with version $version"
-          
-          # Display the updated version lines for verification
-          Get-Content $csprojPath | Select-String -Pattern "Version|AssemblyVersion|FileVersion"
+
+      - name: Commit version change
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add monitor_desktop.csproj
+          git diff --staged --quiet || git commit -m "Bump version to ${{ steps.version.outputs.VERSION }} [skip ci]"
+          git push
 
       - name: Restore dependencies
         run: dotnet restore monitor_desktop.csproj
@@ -87,11 +92,6 @@ jobs:
             -p:DebugSymbols=false `
             -o publish/
 
-      - name: List publish contents
-        shell: pwsh
-        run: |
-          Get-ChildItem publish/ -Recurse | Select-Object FullName, Length
-
       - name: Create ZIP Archive
         shell: pwsh
         run: |
@@ -99,7 +99,7 @@ jobs:
           Compress-Archive -Path publish/* -DestinationPath "WorkPulse-v$version.zip"
           Write-Host "Created WorkPulse-v$version.zip"
 
-      - name: Create or Update Release
+      - name: Create Tag and Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: "v${{ steps.version.outputs.VERSION }}"
