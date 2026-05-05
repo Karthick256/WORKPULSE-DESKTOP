@@ -148,6 +148,58 @@ namespace monitor_desktop.Services
                 };
             }
         }
+
+        public async Task<ApiResponse<List<LiveScreenResponseDto>>> GetPendingLiveStreamRequests(long sessionId)
+        {
+            try
+            {
+                var response = await _apiClient.GetAsync<List<LiveScreenResponseDto>>($"{ApiConfig.LiveScreenPending}/{sessionId}");
+                return response;
+            }
+            catch (Exception ex)
+            {
+                return new ApiResponse<List<LiveScreenResponseDto>>
+                {
+                    Status = 500,
+                    Message = $"Failed to get pending live stream requests: {ex.Message}",
+                    Data = null
+                };
+            }
+        }
+
+        public async Task<ApiResponse<LiveScreenResponseDto>> ConfirmLiveStreamStart(string streamId)
+        {
+            try
+            {
+                return await _apiClient.PostAsync<LiveScreenResponseDto>($"{ApiConfig.LiveScreenConfirm}/{streamId}", null);
+            }
+            catch (Exception ex)
+            {
+                return new ApiResponse<LiveScreenResponseDto>
+                {
+                    Status = 500,
+                    Message = $"Failed to confirm stream start: {ex.Message}",
+                    Data = null
+                };
+            }
+        }
+
+        public async Task<ApiResponse<LiveScreenResponseDto>> StopLiveStream(string streamId)
+        {
+            try
+            {
+                return await _apiClient.PostAsync<LiveScreenResponseDto>($"{ApiConfig.LiveScreenStop}/{streamId}", null);
+            }
+            catch (Exception ex)
+            {
+                return new ApiResponse<LiveScreenResponseDto>
+                {
+                    Status = 500,
+                    Message = $"Failed to stop live stream: {ex.Message}",
+                    Data = null
+                };
+            }
+        }
     }
 
     public class VoidResponse { }

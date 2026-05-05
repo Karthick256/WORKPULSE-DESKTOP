@@ -16,6 +16,7 @@ namespace monitor_desktop.Services
 
         private readonly ActivityTrackingService _trackingService;
         private ScreenshotCaptureService _screenshotCaptureService;
+        private LiveScreenStreamingService _liveScreenService;
         private readonly TokenManager _tokenManager;
 
         private bool _isTracking;
@@ -149,11 +150,29 @@ namespace monitor_desktop.Services
             _screenshotCaptureService.StatusChanged += OnScreenshotStatusChanged;
             SystemEvents.PowerModeChanged += OnPowerModeChanged;
             SystemEvents.SessionSwitch += OnSessionSwitch;
+
+            // DO NOT create LiveScreenService here - _currentSessionId is 0
+            // It will be created in StartTracking when we have the correct session ID
         }
 
         private void OnScreenshotStatusChanged(object sender, string status)
         {
             StatusChanged?.Invoke(this, $"[SCREENSHOT] {status}");
+        }
+
+        private void OnLiveScreenStatusChanged(object sender, string status)
+        {
+            StatusChanged?.Invoke(this, $"[LIVE-STREAM] {status}");
+        }
+
+        private void OnLiveScreenError(object sender, string error)
+        {
+            StatusChanged?.Invoke(this, $"[LIVE-STREAM] ERROR: {error}");
+        }
+
+        private void OnLiveScreenStreamingStatusChanged(object sender, bool isStreaming)
+        {
+            StatusChanged?.Invoke(this, isStreaming ? "[LIVE-STREAM] STREAMING ACTIVE" : "[LIVE-STREAM] STREAMING STOPPED");
         }
 
         #region Native Methods
@@ -1111,6 +1130,29 @@ namespace monitor_desktop.Services
                 _pendingUrlVisits.Clear();
 
                 _screenshotCaptureService?.StartPolling(sessionId);
+
+                // CREATE LiveScreenService HERE with the correct session ID
+                if (_liveScreenService == null)
+                {
+                    _liveScreenService = new LiveScreenStreamingService(
+                        ApiConfig.BaseUrl,
+                        _currentSessionId,
+                        _tokenManager,
+                        _trackingService);
+
+                    _liveScreenService.StatusChanged += OnLiveScreenStatusChanged;
+                    _liveScreenService.ErrorOccurred += OnLiveScreenError;
+                    _liveScreenService.StreamingStatusChanged += OnLiveScreenStreamingStatusChanged;
+                }
+
+                // Start live screen streaming service
+                _ = Task.Run(async () =>
+                {
+                    if (_liveScreenService != null)
+                    {
+                        await _liveScreenService.ConnectAsync();
+                    }
+                });
             }
 
             _keyboardProc = KeyboardHookCallback;
@@ -1144,6 +1186,15 @@ namespace monitor_desktop.Services
         public async Task StopTrackingAsync(bool sendFinalData = true)
         {
             _screenshotCaptureService?.StopPolling();
+
+            // Stop and dispose live screen service
+            if (_liveScreenService != null)
+            {
+                await _liveScreenService.DisconnectAsync();
+                _liveScreenService.Dispose();
+                _liveScreenService = null; // Will be recreated on next StartTracking
+            }
+
             if (!_isTracking) return;
 
             if (sendFinalData && !_isTrackingPaused)
@@ -1225,6 +1276,13 @@ namespace monitor_desktop.Services
             if (_isDisposed) return;
             _screenshotCaptureService?.Dispose();
             _screenshotCaptureService = null;
+
+            if (_liveScreenService != null)
+            {
+                _liveScreenService.Dispose();
+                _liveScreenService = null;
+            }
+
             SystemEvents.PowerModeChanged -= OnPowerModeChanged;
             SystemEvents.SessionSwitch -= OnSessionSwitch;
             _isDisposed = true;

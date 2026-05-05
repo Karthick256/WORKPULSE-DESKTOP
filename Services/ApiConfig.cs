@@ -2,7 +2,7 @@
 {
     public static class ApiConfig
     {
-        public const string BaseUrl = "https://www.ttassessments.com:2027";
+        public const string BaseUrl = "http://localhost:2027";
         public const string ApiVersion = "api/v1";
         public const string ApiBaseUrl = BaseUrl + "/" + ApiVersion;
 
@@ -25,5 +25,8 @@
         public const string TrackingScreenshotRequest = ApiBaseUrl + "/tracking/admin/screenshot/request";
         public const string TrackingScreenshotPending = ApiBaseUrl + "/tracking/agent/screenshot/pending";
         public const string TrackingScreenshotUpload = ApiBaseUrl + "/tracking/agent/screenshot/upload";
+        public const string LiveScreenPending = ApiBaseUrl + "/live-screen/agent/pending";
+        public const string LiveScreenConfirm = ApiBaseUrl + "/live-screen/agent/confirm";
+        public const string LiveScreenStop = ApiBaseUrl + "/live-screen/agent/stop";
     }
 }
