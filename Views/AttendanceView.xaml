@@ -96,13 +96,6 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <Border Grid.Row="0" Background="#EFF6FF" CornerRadius="10" Padding="12,10" Margin="0,0,0,16" BorderBrush="#E2E8F0" BorderThickness="1">
-            <StackPanel Orientation="Horizontal">
-                <TextBlock Text="ℹ" FontSize="14" Foreground="#2563EB" VerticalAlignment="Center"/>
-                <TextBlock Text="{Binding StatusMessage}" Foreground="#64748B" FontSize="12" Margin="10,0,0,0" VerticalAlignment="Center"/>
-            </StackPanel>
-        </Border>
-
         <Border Grid.Row="1" Style="{StaticResource CardStyle}" Padding="30" HorizontalAlignment="Center" Width="400">
             <StackPanel>
                 <Border Width="60" Height="60" CornerRadius="16" HorizontalAlignment="Center" Margin="0,0,0,16">
