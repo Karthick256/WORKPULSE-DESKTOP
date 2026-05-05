@@ -2,7 +2,7 @@
 {
     public static class ApiConfig
     {
-        public const string BaseUrl = "http://localhost:2027";
+        public const string BaseUrl = "https://www.ttassessments.com:2027";
         public const string ApiVersion = "api/v1";
         public const string ApiBaseUrl = BaseUrl + "/" + ApiVersion;
 
