@@ -114,6 +114,92 @@ namespace monitor_desktop.Services
             }
         }
 
+        public async Task<ApiResponse<VoidResponse>> CloseIdlePeriod(long sessionId)
+        {
+            try
+            {
+                var url = $"{ApiConfig.TrackingIdleEnd}/{sessionId}";
+                return await _apiClient.PostAsync<VoidResponse>(url, null);
+            }
+            catch (Exception ex)
+            {
+                return new ApiResponse<VoidResponse>
+                {
+                    Status = 500,
+                    Message = $"Failed to close idle period: {ex.Message}",
+                    Data = null
+                };
+            }
+        }
+
+        public async Task<ApiResponse<BreakResponse>> StartBreak(BreakStartRequest request)
+        {
+            try
+            {
+                return await _apiClient.PostAsync<BreakResponse>(ApiConfig.TrackingBreakStart, request);
+            }
+            catch (Exception ex)
+            {
+                return new ApiResponse<BreakResponse>
+                {
+                    Status = 500,
+                    Message = $"Failed to start break: {ex.Message}",
+                    Data = null
+                };
+            }
+        }
+
+        public async Task<ApiResponse<BreakResponse>> EndMyBreak()
+        {
+            try
+            {
+                return await _apiClient.PostAsync<BreakResponse>(ApiConfig.TrackingBreakClose, null);
+            }
+            catch (Exception ex)
+            {
+                return new ApiResponse<BreakResponse>
+                {
+                    Status = 500,
+                    Message = $"Failed to end break: {ex.Message}",
+                    Data = null
+                };
+            }
+        }
+
+        public async Task<ApiResponse<BreakResponse>> GetMyActiveBreak()
+        {
+            try
+            {
+                return await _apiClient.GetAsync<BreakResponse>(ApiConfig.TrackingBreakActiveMe);
+            }
+            catch (Exception ex)
+            {
+                return new ApiResponse<BreakResponse>
+                {
+                    Status = 500,
+                    Message = $"Failed to get active break: {ex.Message}",
+                    Data = null
+                };
+            }
+        }
+
+        public async Task<ApiResponse<List<BreakResponse>>> GetMyBreakHistory(int limit = 20)
+        {
+            try
+            {
+                return await _apiClient.GetAsync<List<BreakResponse>>($"{ApiConfig.TrackingBreakHistory}?limit={limit}");
+            }
+            catch (Exception ex)
+            {
+                return new ApiResponse<List<BreakResponse>>
+                {
+                    Status = 500,
+                    Message = $"Failed to get break history: {ex.Message}",
+                    Data = null
+                };
+            }
+        }
+
         public async Task<ApiResponse<List<ScreenshotResponseDto>>> GetPendingScreenshotRequests(long sessionId)
         {
             try

@@ -1,0 +1,117 @@
+<Window x:Class="monitor_desktop.Views.BreakSelectionWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Start Break"
+        Height="480"
+        Width="400"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent">
+
+    <Window.Resources>
+        <SolidColorBrush x:Key="CardBg" Color="#FFFFFF"/>
+        <SolidColorBrush x:Key="AccentBlue" Color="#2563EB"/>
+        <SolidColorBrush x:Key="AccentTeal" Color="#0EA5E9"/>
+        <SolidColorBrush x:Key="TextDark" Color="#0F172A"/>
+        <SolidColorBrush x:Key="TextSub" Color="#64748B"/>
+        <SolidColorBrush x:Key="InputBorder" Color="#E2E8F0"/>
+        <SolidColorBrush x:Key="InputBg" Color="#F8FAFC"/>
+
+        <Style x:Key="BreakTypeButton" TargetType="Button">
+            <Setter Property="Background" Value="{StaticResource InputBg}"/>
+            <Setter Property="Foreground" Value="{StaticResource TextDark}"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Height" Value="50"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="BorderBrush" Value="{StaticResource InputBorder}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}" 
+                                BorderBrush="{TemplateBinding BorderBrush}" 
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="10">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{StaticResource AccentBlue}"/>
+                                <Setter Property="Foreground" Value="White"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Border CornerRadius="16" Background="{StaticResource CardBg}">
+        <Border.Effect>
+            <DropShadowEffect Color="#94A3B8" BlurRadius="25" ShadowDepth="0" Opacity="0.25"/>
+        </Border.Effect>
+
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="45"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <!-- Title Bar -->
+            <Border Grid.Row="0" Background="{StaticResource InputBg}" CornerRadius="16,16,0,0">
+                <Grid>
+                    <TextBlock Text="Take a Break" FontSize="15" FontWeight="Bold" 
+                               Foreground="{StaticResource TextDark}" 
+                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    <Button x:Name="CloseButton" Content="✕" 
+                            Width="30" Height="30" 
+                            HorizontalAlignment="Right" Margin="0,0,10,0"
+                            Background="Transparent" BorderThickness="0"
+                            Cursor="Hand" Foreground="{StaticResource TextSub}"
+                            Click="CloseButton_Click"/>
+                </Grid>
+            </Border>
+
+            <!-- Content -->
+            <StackPanel Grid.Row="1" Margin="24,20,24,24">
+                <TextBlock Text="Select break type" FontSize="14" FontWeight="SemiBold" 
+                           Foreground="{StaticResource TextDark}" Margin="0,0,0,16"/>
+
+                <Button x:Name="LunchBreakBtn" Content="🍽️  Lunch Break" 
+                        Style="{StaticResource BreakTypeButton}" Margin="0,0,0,10"
+                        Click="BreakType_Click" Tag="LUNCH"/>
+
+                <Button x:Name="ShortBreakBtn" Content="☕  Short Break (5-10 min)" 
+                        Style="{StaticResource BreakTypeButton}" Margin="0,0,0,10"
+                        Click="BreakType_Click" Tag="SHORT_BREAK"/>
+
+                <Button x:Name="LongBreakBtn" Content="🌿  Long Break (15-30 min)" 
+                        Style="{StaticResource BreakTypeButton}" Margin="0,0,0,10"
+                        Click="BreakType_Click" Tag="LONG_BREAK"/>
+
+                <Button x:Name="MeetingBtn" Content="👥  Meeting" 
+                        Style="{StaticResource BreakTypeButton}" Margin="0,0,0,10"
+                        Click="BreakType_Click" Tag="MEETING"/>
+
+                <Button x:Name="TrainingBtn" Content="📚  Training Session" 
+                        Style="{StaticResource BreakTypeButton}" Margin="0,0,0,10"
+                        Click="BreakType_Click" Tag="TRAINING"/>
+
+                <Button x:Name="PersonalBtn" Content="💚  Personal Break" 
+                        Style="{StaticResource BreakTypeButton}" Margin="0,0,0,10"
+                        Click="BreakType_Click" Tag="PERSONAL"/>
+
+                <Separator Margin="0,16,0,12"/>
+
+                <TextBlock Text="Notes (optional)" FontSize="12" Foreground="{StaticResource TextSub}" Margin="0,0,0,6"/>
+                <TextBox x:Name="NotesBox" Height="60" TextWrapping="Wrap" 
+                         AcceptsReturn="True" VerticalScrollBarVisibility="Auto"
+                         Background="{StaticResource InputBg}" BorderBrush="{StaticResource InputBorder}"
+                         BorderThickness="1" Padding="10" FontSize="12"/>
+            </StackPanel>
+        </Grid>
+    </Border>
+</Window>

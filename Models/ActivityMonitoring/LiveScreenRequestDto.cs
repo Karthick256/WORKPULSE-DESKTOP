@@ -16,8 +16,8 @@ namespace monitor_desktop.Models.ActivityMonitoring
         [JsonPropertyName("fps")]
         public int? Fps { get; set; }
 
-        [JsonPropertyName("duration")]
-        public int? Duration { get; set; }
+        [JsonPropertyName("maxDurationSeconds")]
+        public int? MaxDurationSeconds { get; set; }
     }
 
     public class LiveScreenResponseDto
@@ -40,9 +40,6 @@ namespace monitor_desktop.Models.ActivityMonitoring
         [JsonPropertyName("errorMessage")]
         public string ErrorMessage { get; set; }
 
-        [JsonPropertyName("streamUrl")]
-        public string StreamUrl { get; set; }
-
         [JsonPropertyName("startedAt")]
         public DateTime? StartedAt { get; set; }
 
@@ -51,6 +48,12 @@ namespace monitor_desktop.Models.ActivityMonitoring
 
         [JsonPropertyName("viewerCount")]
         public int ViewerCount { get; set; }
+
+        [JsonPropertyName("fps")]
+        public int? Fps { get; set; }
+
+        [JsonPropertyName("quality")]
+        public int? Quality { get; set; }
     }
 
     public class StreamFrameDto
@@ -58,10 +61,11 @@ namespace monitor_desktop.Models.ActivityMonitoring
         [JsonPropertyName("streamId")]
         public string StreamId { get; set; }
 
-        [JsonPropertyName("imageBase64")]
+        // Backend expects 'imageData', not 'imageBase64'
+        [JsonPropertyName("imageData")]
         public string ImageBase64 { get; set; }
 
-        [JsonPropertyName("frameNumber")]
+        [JsonPropertyName("sequenceNumber")]
         public long FrameNumber { get; set; }
 
         [JsonPropertyName("timestamp")]

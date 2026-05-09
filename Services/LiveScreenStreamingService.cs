@@ -11,6 +11,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using monitor_desktop.Models.ActivityMonitoring;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Serialization;
 
 namespace monitor_desktop.Services
 {
@@ -37,7 +38,14 @@ namespace monitor_desktop.Services
         private CancellationTokenSource _cts;
         private int _subscriptionId = 1;
         private readonly object _sendLock = new object();
-        private bool _isSubscribed = false;
+        private bool _isStompConnected = false;
+        private StringBuilder _partialMessage = new StringBuilder();
+        private DateTime _lastFrameTime = DateTime.MinValue;
+        private int _frameIntervalMs;
+
+        // Performance tracking
+        private int _framesSent = 0;
+        private DateTime _lastStatsTime = DateTime.Now;
 
         public event EventHandler<string> StatusChanged;
         public event EventHandler<string> ErrorOccurred;
@@ -52,14 +60,20 @@ namespace monitor_desktop.Services
             _sessionId = sessionId;
             _tokenManager = tokenManager;
             _trackingService = trackingService;
+            _frameIntervalMs = 1000 / _targetFps;
         }
 
         public async Task ConnectAsync()
         {
             if (_isDisposed) return;
 
+            lock (_lockObject)
+            {
+                if (_isConnected) return;
+            }
+
             var wsUrl = BuildWebSocketUrl();
-            Debug.WriteLine($"Connecting to WebSocket: {wsUrl}");
+            Debug.WriteLine($"[LIVE-STREAM] Connecting to WebSocket: {wsUrl}");
 
             try
             {
@@ -67,39 +81,38 @@ namespace monitor_desktop.Services
                 _webSocket = new ClientWebSocket();
 
                 // Add required WebSocket headers
-                _webSocket.Options.SetRequestHeader("Origin", "http://localhost:2027");
-                _webSocket.Options.SetRequestHeader("User-Agent", "DesktopAgent/1.0");
-
-                // Add authorization header
                 var token = _tokenManager.CurrentToken?.Token;
                 if (!string.IsNullOrEmpty(token))
                 {
                     _webSocket.Options.SetRequestHeader("Authorization", $"Bearer {token}");
+                    Debug.WriteLine("[LIVE-STREAM] Added Authorization header");
                 }
 
-                // Set keep-alive interval
+                _webSocket.Options.SetRequestHeader("Origin", _serverUrl);
+                _webSocket.Options.SetRequestHeader("User-Agent", "WorkPulse-DesktopAgent/1.0");
                 _webSocket.Options.KeepAliveInterval = TimeSpan.FromSeconds(30);
 
-                // Connect with proper WebSocket subprotocol
+                // Connect
                 await _webSocket.ConnectAsync(new Uri(wsUrl), _cts.Token);
 
                 if (_webSocket.State == WebSocketState.Open)
                 {
                     _isConnected = true;
+                    _isStompConnected = false;
                     _reconnectAttempts = 0;
-                    Debug.WriteLine("WebSocket connected successfully");
+                    Debug.WriteLine("[LIVE-STREAM] WebSocket connected");
                     StatusChanged?.Invoke(this, "WebSocket connected");
 
-                    // Start message receiver loop
+                    // Start message receiver
                     _ = Task.Run(ReceiveMessagesAsync);
 
-                    // Send STOMP CONNECT frame
+                    // Send STOMP CONNECT with correct frame format
                     await SendStompConnectAsync();
                 }
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"Failed to connect WebSocket: {ex.Message}");
+                Debug.WriteLine($"[LIVE-STREAM] Connection failed: {ex.Message}");
                 ErrorOccurred?.Invoke(this, $"Connection failed: {ex.Message}");
                 await ScheduleReconnect();
             }
@@ -109,34 +122,22 @@ namespace monitor_desktop.Services
         {
             var baseUrl = _serverUrl;
 
+            // Convert http/https to ws/wss and clean up
             if (baseUrl.StartsWith("https://"))
-            {
                 baseUrl = baseUrl.Replace("https://", "wss://");
-            }
             else if (baseUrl.StartsWith("http://"))
-            {
                 baseUrl = baseUrl.Replace("http://", "ws://");
-            }
             else
-            {
                 baseUrl = "ws://" + baseUrl;
-            }
 
             baseUrl = baseUrl.TrimEnd('/');
 
-            // Remove any existing path and add correct endpoint
-            if (baseUrl.Contains("/ws/live-screen"))
-            {
-                baseUrl = baseUrl.Substring(0, baseUrl.IndexOf("/ws/live-screen"));
-            }
+            // Use /ws endpoint
+            var uri = new Uri(baseUrl);
+            var wsUrl = $"{uri.Scheme}://{uri.Host}:{uri.Port}/ws";
 
-            baseUrl = baseUrl + "/ws/live-screen";
-
-            // Don't add token to URL for now - use header instead
-            // Some servers reject URLs with query parameters for WebSocket upgrade
-
-            Debug.WriteLine($"WebSocket URL: {baseUrl}");
-            return baseUrl;
+            Debug.WriteLine($"[LIVE-STREAM] WebSocket URL: {wsUrl}");
+            return wsUrl;
         }
 
         private async Task SendStompConnectAsync()
@@ -145,21 +146,25 @@ namespace monitor_desktop.Services
 
             var token = _tokenManager.CurrentToken?.Token;
 
-            var connectFrame = new StringBuilder();
-            connectFrame.AppendLine("CONNECT");
-            connectFrame.AppendLine("accept-version:1.2,1.1,1.0");
-            connectFrame.AppendLine("heart-beat:10000,10000");
+            // Build correct STOMP CONNECT frame
+            // IMPORTANT: Each line must end with \r\n (CRLF) according to STOMP spec
+            var connectFrameBuilder = new StringBuilder();
+            connectFrameBuilder.Append("CONNECT\r\n");
+            connectFrameBuilder.Append("accept-version:1.2,1.1,1.0\r\n");
+            connectFrameBuilder.Append("heart-beat:10000,10000\r\n");
             if (!string.IsNullOrEmpty(token))
             {
-                connectFrame.AppendLine($"Authorization:Bearer {token}");
+                connectFrameBuilder.Append($"Authorization:Bearer {token}\r\n");
             }
-            connectFrame.AppendLine();
-            connectFrame.Append("\0");
+            connectFrameBuilder.Append("\r\n"); // Empty line to end headers
+            connectFrameBuilder.Append("\0"); // NULL terminator
 
-            await SendRawFrameAsync(connectFrame.ToString());
-            Debug.WriteLine("Sent STOMP CONNECT frame");
+            var connectFrame = connectFrameBuilder.ToString();
+            await SendRawFrameAsync(connectFrame);
+            Debug.WriteLine("[LIVE-STREAM] STOMP CONNECT sent");
+            Debug.WriteLine($"[LIVE-STREAM] CONNECT frame: {connectFrame.Replace("\r\n", "\\r\\n")}");
 
-            // Start keep-alive timer for heart-beat
+            // Start keep-alive after connection is established
             StartKeepAlive();
         }
 
@@ -178,47 +183,45 @@ namespace monitor_desktop.Services
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"Error sending frame: {ex.Message}");
+                Debug.WriteLine($"[LIVE-STREAM] Error sending frame: {ex.Message}");
             }
         }
 
         private async Task ReceiveMessagesAsync()
         {
             var buffer = new byte[65536];
-            var messageBuilder = new StringBuilder();
 
             try
             {
                 while (_webSocket?.State == WebSocketState.Open && !_cts.Token.IsCancellationRequested)
                 {
-                    WebSocketReceiveResult result;
-                    do
+                    var result = await _webSocket.ReceiveAsync(
+                        new ArraySegment<byte>(buffer),
+                        _cts.Token);
+
+                    var messagePart = Encoding.UTF8.GetString(buffer, 0, result.Count);
+                    _partialMessage.Append(messagePart);
+
+                    if (result.EndOfMessage)
                     {
-                        result = await _webSocket.ReceiveAsync(
-                            new ArraySegment<byte>(buffer),
-                            _cts.Token);
+                        var fullMessage = _partialMessage.ToString();
+                        _partialMessage.Clear();
 
-                        var messagePart = Encoding.UTF8.GetString(buffer, 0, result.Count);
-                        messageBuilder.Append(messagePart);
-
-                    } while (!result.EndOfMessage);
-
-                    var fullMessage = messageBuilder.ToString();
-                    messageBuilder.Clear();
-
-                    if (!string.IsNullOrEmpty(fullMessage))
-                    {
-                        await ProcessReceivedMessageAsync(fullMessage);
+                        if (!string.IsNullOrEmpty(fullMessage))
+                        {
+                            Debug.WriteLine($"[LIVE-STREAM] Received: {fullMessage.Substring(0, Math.Min(200, fullMessage.Length))}");
+                            await ProcessReceivedMessageAsync(fullMessage);
+                        }
                     }
                 }
             }
             catch (OperationCanceledException)
             {
-                Debug.WriteLine("Message receive cancelled");
+                Debug.WriteLine("[LIVE-STREAM] Receive cancelled");
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"Error receiving message: {ex.Message}");
+                Debug.WriteLine($"[LIVE-STREAM] Receive error: {ex.Message}");
                 if (!_isDisposed)
                 {
                     _ = ScheduleReconnect();
@@ -230,55 +233,70 @@ namespace monitor_desktop.Services
         {
             try
             {
-                Debug.WriteLine($"Received: {message.Substring(0, Math.Min(200, message.Length))}");
-
+                // Check for CONNECTED response
                 if (message.StartsWith("CONNECTED"))
                 {
-                    Debug.WriteLine("STOMP CONNECTED successfully");
-                    _isSubscribed = true;
-                    await SubscribeToSessionChannelAsync();
+                    Debug.WriteLine("[LIVE-STREAM] STOMP CONNECTED");
+                    _isStompConnected = true;
+                    await SubscribeToChannelsAsync();
                     await StartPollingPendingRequestsAsync();
-
-                    StatusChanged?.Invoke(this, "STOMP connected and subscribed");
+                    StatusChanged?.Invoke(this, "STOMP connected");
                 }
                 else if (message.StartsWith("MESSAGE"))
                 {
-                    var body = ParseStompFrameBody(message);
+                    var body = ParseStompBody(message);
                     if (!string.IsNullOrEmpty(body))
                     {
+                        Debug.WriteLine($"[LIVE-STREAM] Message body length: {body.Length}");
                         await ProcessMessageBodyAsync(body);
                     }
                 }
                 else if (message.StartsWith("RECEIPT"))
                 {
-                    Debug.WriteLine("STOMP receipt received");
+                    Debug.WriteLine("[LIVE-STREAM] Receipt received");
                 }
                 else if (message.StartsWith("ERROR"))
                 {
-                    Debug.WriteLine($"STOMP error: {message}");
-                    ErrorOccurred?.Invoke(this, $"STOMP error: {message}");
+                    Debug.WriteLine($"[LIVE-STREAM] STOMP Error: {message}");
+                    var errorBody = ParseStompBody(message);
+                    if (!string.IsNullOrEmpty(errorBody))
+                    {
+                        ErrorOccurred?.Invoke(this, $"STOMP error: {errorBody}");
+                    }
                 }
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"Error processing message: {ex.Message}");
+                Debug.WriteLine($"[LIVE-STREAM] Error processing message: {ex.Message}");
             }
         }
 
-        private string ParseStompFrameBody(string stompFrame)
+        private string ParseStompBody(string stompFrame)
         {
             try
             {
-                // Find the double newline that separates headers from body
-                int headerEndIndex = stompFrame.IndexOf("\n\n");
-                if (headerEndIndex == -1) return null;
+                // Find the double newline (CRLF CRLF or LF LF) that separates headers from body
+                int headerEnd = stompFrame.IndexOf("\r\n\r\n");
+                if (headerEnd == -1)
+                {
+                    headerEnd = stompFrame.IndexOf("\n\n");
+                }
+                if (headerEnd == -1) return null;
 
-                int bodyStart = headerEndIndex + 2;
+                int bodyStart = headerEnd + 2;
+                if (stompFrame[headerEnd] == '\r')
+                {
+                    bodyStart = headerEnd + 4;
+                }
+                else
+                {
+                    bodyStart = headerEnd + 2;
+                }
+
                 if (bodyStart >= stompFrame.Length) return null;
 
-                string body = stompFrame.Substring(bodyStart);
-
-                // Remove trailing null character
+                var body = stompFrame.Substring(bodyStart);
+                // Remove null terminator if present
                 if (body.EndsWith("\0"))
                     body = body.Substring(0, body.Length - 1);
 
@@ -286,7 +304,7 @@ namespace monitor_desktop.Services
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"Error parsing STOMP frame: {ex.Message}");
+                Debug.WriteLine($"[LIVE-STREAM] Parse error: {ex.Message}");
                 return null;
             }
         }
@@ -295,20 +313,24 @@ namespace monitor_desktop.Services
         {
             try
             {
-                Debug.WriteLine($"Processing: {body}");
-                var message = JsonConvert.DeserializeObject<dynamic>(body);
-
+                var settings = new JsonSerializerSettings
+                {
+                    ContractResolver = new CamelCasePropertyNamesContractResolver()
+                };
+                var message = JsonConvert.DeserializeObject<dynamic>(body, settings);
                 if (message == null) return;
 
                 string action = message.action != null ? (string)message.action : "";
                 string status = message.status != null ? (string)message.status : "";
 
+                Debug.WriteLine($"[LIVE-STREAM] Message - Action: {action}, Status: {status}");
+
                 if (message.streamId != null)
                 {
                     var streamId = (string)message.streamId;
-                    Debug.WriteLine($"Stream: {streamId}, Status: {status}, Action: {action}");
+                    Debug.WriteLine($"[LIVE-STREAM] Stream: {streamId}, Status: {status}");
 
-                    if (status == "REQUESTED" && !_isStreaming)
+                    if ((status == "REQUESTED" || status == "STARTING") && !_isStreaming)
                     {
                         int quality = message.quality != null ? (int)message.quality : 50;
                         int fps = message.fps != null ? (int)message.fps : 5;
@@ -322,99 +344,40 @@ namespace monitor_desktop.Services
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"Error processing message body: {ex.Message}");
+                Debug.WriteLine($"[LIVE-STREAM] Error processing body: {ex.Message}");
             }
         }
 
-        private async Task SubscribeToSessionChannelAsync()
+        private async Task SubscribeToChannelsAsync()
         {
-            if (_webSocket?.State != WebSocketState.Open) return;
+            if (_webSocket?.State != WebSocketState.Open || !_isStompConnected) return;
 
-            // Subscribe to session-specific topic
-            var destination = $"/topic/session/{_sessionId}/live-screen";
-            var subscribeFrame = new StringBuilder();
-            subscribeFrame.AppendLine("SUBSCRIBE");
-            subscribeFrame.AppendLine($"id:{_subscriptionId++}");
-            subscribeFrame.AppendLine($"destination:{destination}");
-            subscribeFrame.AppendLine("ack:auto");
-            subscribeFrame.AppendLine();
-            subscribeFrame.Append("\0");
+            // Subscribe to screenshot requests
+            var screenshotDestination = $"/topic/session/{_sessionId}/screenshot-request";
+            var screenshotSub = BuildSubscribeFrame(screenshotDestination, _subscriptionId++);
+            await SendRawFrameAsync(screenshotSub);
+            Debug.WriteLine($"[LIVE-STREAM] Subscribed to: {screenshotDestination}");
 
-            await SendRawFrameAsync(subscribeFrame.ToString());
-            Debug.WriteLine($"Subscribed to: {destination}");
-
-            // Also subscribe to user queue
-            var adminDestination = $"/user/queue/live-screen/status";
-            subscribeFrame.Clear();
-            subscribeFrame.AppendLine("SUBSCRIBE");
-            subscribeFrame.AppendLine($"id:{_subscriptionId++}");
-            subscribeFrame.AppendLine($"destination:{adminDestination}");
-            subscribeFrame.AppendLine("ack:auto");
-            subscribeFrame.AppendLine();
-            subscribeFrame.Append("\0");
-
-            await SendRawFrameAsync(subscribeFrame.ToString());
-            Debug.WriteLine($"Subscribed to: {adminDestination}");
+            // Subscribe to stream requests
+            var streamDestination = $"/topic/session/{_sessionId}/stream-request";
+            var streamSub = BuildSubscribeFrame(streamDestination, _subscriptionId++);
+            await SendRawFrameAsync(streamSub);
+            Debug.WriteLine($"[LIVE-STREAM] Subscribed to: {streamDestination}");
         }
 
-        private async Task SendFrameToServerAsync(StreamFrameDto frame)
+        private string BuildSubscribeFrame(string destination, int id)
         {
-            if (_webSocket?.State != WebSocketState.Open || !_isSubscribed) return;
-
-            lock (_sendLock)
-            {
-                try
-                {
-                    var frameJson = JsonConvert.SerializeObject(frame);
-
-                    var sendFrame = new StringBuilder();
-                    sendFrame.AppendLine("SEND");
-                    sendFrame.AppendLine("destination:/app/live-screen/frame");
-                    sendFrame.AppendLine("content-type:application/json");
-                    sendFrame.AppendLine($"content-length:{Encoding.UTF8.GetBytes(frameJson).Length}");
-                    sendFrame.AppendLine();
-                    sendFrame.Append(frameJson);
-                    sendFrame.Append("\0");
-
-                    var bytes = Encoding.UTF8.GetBytes(sendFrame.ToString());
-                    _webSocket.SendAsync(
-                        new ArraySegment<byte>(bytes),
-                        WebSocketMessageType.Text,
-                        true,
-                        _cts.Token).Wait();
-                }
-                catch (Exception ex)
-                {
-                    Debug.WriteLine($"Error sending frame: {ex.Message}");
-                }
-            }
-        }
-
-        private void StartKeepAlive()
-        {
-            _keepAliveTimer?.Dispose();
-            _keepAliveTimer = new Timer(async _ => await SendHeartbeatAsync(), null, 10000, 10000);
-        }
-
-        private async Task SendHeartbeatAsync()
-        {
-            if (_webSocket?.State == WebSocketState.Open && _isSubscribed)
-            {
-                try
-                {
-                    // Send STOMP heartbeat (newline)
-                    await SendRawFrameAsync("\n");
-                }
-                catch (Exception ex)
-                {
-                    Debug.WriteLine($"Heartbeat error: {ex.Message}");
-                }
-            }
+            // STOMP SUBSCRIBE frame with CRLF line endings
+            return $"SUBSCRIBE\r\nid:{id}\r\ndestination:{destination}\r\nack:auto\r\n\r\n\0";
         }
 
         private async Task StartPollingPendingRequestsAsync()
         {
             if (_pollingTimer != null) return;
+
+            // Initial check after delay
+            await Task.Delay(2000);
+            await CheckPendingRequestsAsync();
 
             _pollingTimer = new Timer(async _ => await CheckPendingRequestsAsync(),
                 null, 5000, 10000);
@@ -429,15 +392,17 @@ namespace monitor_desktop.Services
 
             try
             {
+                Debug.WriteLine($"[LIVE-STREAM] Checking pending requests for session {_sessionId}");
                 var response = await _trackingService.GetPendingLiveStreamRequests(_sessionId);
+
                 if (response.Status == 200 && response.Data != null && response.Data.Count > 0)
                 {
                     foreach (var request in response.Data)
                     {
                         if ((request.Status == "REQUESTED" || request.Status == "STARTING") && !_isStreaming)
                         {
-                            Debug.WriteLine($"Found pending stream request: {request.StreamId}");
-                            await StartStreamingAsync(request.StreamId, 50, 5);
+                            Debug.WriteLine($"[LIVE-STREAM] Found pending stream request: {request.StreamId}");
+                            await StartStreamingAsync(request.StreamId, request.Quality ?? 50, request.Fps ?? 5);
                             break;
                         }
                     }
@@ -445,7 +410,7 @@ namespace monitor_desktop.Services
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"Error checking pending requests: {ex.Message}");
+                Debug.WriteLine($"[LIVE-STREAM] Error checking requests: {ex.Message}");
             }
         }
 
@@ -459,23 +424,26 @@ namespace monitor_desktop.Services
                 _isStreaming = true;
                 _quality = Math.Clamp(quality, 10, 100);
                 _targetFps = Math.Clamp(fps, 1, 30);
+                _frameIntervalMs = 1000 / _targetFps;
+                _framesSent = 0;
+                _lastStatsTime = DateTime.Now;
             }
 
             try
             {
                 await ConfirmStreamStartAsync(streamId);
 
-                int intervalMs = 1000 / _targetFps;
+                // Start frame capture timer
                 _frameTimer?.Dispose();
-                _frameTimer = new Timer(CaptureAndSendFrame, null, 0, intervalMs);
+                _frameTimer = new Timer(CaptureAndSendFrame, null, 0, _frameIntervalMs);
 
-                Debug.WriteLine($"Started streaming: {streamId}, Quality: {_quality}, FPS: {_targetFps}");
-                StatusChanged?.Invoke(this, $"Live streaming started: {streamId}");
+                Debug.WriteLine($"[LIVE-STREAM] Started streaming: {streamId}, Quality: {_quality}%, FPS: {_targetFps}");
+                StatusChanged?.Invoke(this, $"Live streaming started (Quality: {_quality}%, FPS: {_targetFps})");
                 StreamingStatusChanged?.Invoke(this, true);
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"Failed to start streaming: {ex.Message}");
+                Debug.WriteLine($"[LIVE-STREAM] Failed to start: {ex.Message}");
                 ErrorOccurred?.Invoke(this, $"Failed to start: {ex.Message}");
                 await StopStreamOnServerAsync(streamId);
                 lock (_lockObject)
@@ -490,41 +458,43 @@ namespace monitor_desktop.Services
         {
             lock (_lockObject)
             {
-                if (!_isStreaming || !_isConnected || _webSocket?.State != WebSocketState.Open) return;
+                if (!_isStreaming || !_isConnected || _webSocket?.State != WebSocketState.Open || !_isStompConnected)
+                    return;
             }
 
             try
             {
+                // Throttle frame rate
+                var now = DateTime.Now;
+                if ((now - _lastFrameTime).TotalMilliseconds < _frameIntervalMs)
+                    return;
+                _lastFrameTime = now;
+
                 var imageBytes = CaptureScreen();
+                if (imageBytes == null || imageBytes.Length == 0) return;
 
-                if (imageBytes != null && imageBytes.Length > 0)
+                _frameNumber++;
+                _framesSent++;
+
+                var imageBase64 = Convert.ToBase64String(imageBytes);
+                var isKeyFrame = _frameNumber % 30 == 1;
+
+                var frameData = new
                 {
-                    _frameNumber++;
-                    var imageBase64 = Convert.ToBase64String(imageBytes);
-                    var isKeyFrame = _frameNumber % 30 == 1;
+                    streamId = _currentStreamId,
+                    imageData = imageBase64,
+                    sequenceNumber = _frameNumber,
+                    timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                    width = (int)SystemParameters.PrimaryScreenWidth,
+                    height = (int)SystemParameters.PrimaryScreenHeight,
+                    isKeyFrame = isKeyFrame
+                };
 
-                    var frame = new StreamFrameDto
-                    {
-                        StreamId = _currentStreamId,
-                        ImageBase64 = imageBase64,
-                        FrameNumber = _frameNumber,
-                        Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-                        Width = (int)SystemParameters.PrimaryScreenWidth,
-                        Height = (int)SystemParameters.PrimaryScreenHeight,
-                        IsKeyFrame = isKeyFrame
-                    };
-
-                    await SendFrameToServerAsync(frame);
-
-                    if (_frameNumber % 100 == 0)
-                    {
-                        Debug.WriteLine($"Sent frame {_frameNumber}");
-                    }
-                }
+                await SendFrameToServerAsync(frameData);
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"Frame capture error: {ex.Message}");
+                Debug.WriteLine($"[LIVE-STREAM] Frame capture error: {ex.Message}");
             }
         }
 
@@ -563,7 +533,7 @@ namespace monitor_desktop.Services
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"Screen capture failed: {ex.Message}");
+                Debug.WriteLine($"[LIVE-STREAM] Screen capture failed: {ex.Message}");
                 return null;
             }
         }
@@ -575,6 +545,59 @@ namespace monitor_desktop.Services
                 (int)SystemParameters.PrimaryScreenHeight);
         }
 
+        private async Task SendFrameToServerAsync(object frameData)
+        {
+            if (_webSocket?.State != WebSocketState.Open || !_isStompConnected) return;
+
+            lock (_sendLock)
+            {
+                try
+                {
+                    var frameJson = JsonConvert.SerializeObject(frameData, new JsonSerializerSettings
+                    {
+                        ContractResolver = new CamelCasePropertyNamesContractResolver()
+                    });
+
+                    // Build SEND frame with CRLF line endings
+                    var frameContent = Encoding.UTF8.GetBytes(frameJson);
+                    var sendFrame = $"SEND\r\ndestination:/app/live-screen/frame\r\ncontent-type:application/json\r\ncontent-length:{frameContent.Length}\r\n\r\n{frameJson}\0";
+
+                    var bytes = Encoding.UTF8.GetBytes(sendFrame);
+                    _webSocket.SendAsync(
+                        new ArraySegment<byte>(bytes),
+                        WebSocketMessageType.Text,
+                        true,
+                        _cts.Token).Wait(100);
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"[LIVE-STREAM] Send frame error: {ex.Message}");
+                }
+            }
+        }
+
+        private void StartKeepAlive()
+        {
+            _keepAliveTimer?.Dispose();
+            _keepAliveTimer = new Timer(async _ => await SendHeartbeatAsync(), null, 10000, 10000);
+        }
+
+        private async Task SendHeartbeatAsync()
+        {
+            if (_webSocket?.State == WebSocketState.Open && _isStompConnected)
+            {
+                try
+                {
+                    // Send STOMP heartbeat (just a newline)
+                    await SendRawFrameAsync("\r\n");
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"[LIVE-STREAM] Heartbeat error: {ex.Message}");
+                }
+            }
+        }
+
         private async Task ConfirmStreamStartAsync(string streamId)
         {
             try
@@ -582,16 +605,16 @@ namespace monitor_desktop.Services
                 var response = await _trackingService.ConfirmLiveStreamStart(streamId);
                 if (response.Status != 200 && response.Status != 201)
                 {
-                    Debug.WriteLine($"Failed to confirm stream start: {response.Message}");
+                    Debug.WriteLine($"[LIVE-STREAM] Confirm failed: {response.Message}");
                 }
                 else
                 {
-                    Debug.WriteLine($"Stream {streamId} confirmed");
+                    Debug.WriteLine($"[LIVE-STREAM] Stream {streamId} confirmed");
                 }
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"Error confirming stream: {ex.Message}");
+                Debug.WriteLine($"[LIVE-STREAM] Confirm error: {ex.Message}");
             }
         }
 
@@ -600,11 +623,11 @@ namespace monitor_desktop.Services
             try
             {
                 await _trackingService.StopLiveStream(streamId);
-                Debug.WriteLine($"Stream {streamId} stopped on server");
+                Debug.WriteLine($"[LIVE-STREAM] Stream {streamId} stopped on server");
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"Error stopping stream: {ex.Message}");
+                Debug.WriteLine($"[LIVE-STREAM] Stop error: {ex.Message}");
             }
         }
 
@@ -627,7 +650,7 @@ namespace monitor_desktop.Services
                 await StopStreamOnServerAsync(streamIdToStop);
             }
 
-            Debug.WriteLine("Streaming stopped");
+            Debug.WriteLine("[LIVE-STREAM] Streaming stopped");
             StatusChanged?.Invoke(this, "Live streaming stopped");
             StreamingStatusChanged?.Invoke(this, false);
         }
@@ -636,14 +659,15 @@ namespace monitor_desktop.Services
         {
             if (_reconnectAttempts >= MAX_RECONNECT_ATTEMPTS)
             {
-                Debug.WriteLine("Max reconnection attempts reached");
+                Debug.WriteLine("[LIVE-STREAM] Max reconnections reached");
                 ErrorOccurred?.Invoke(this, "Max reconnection attempts reached");
                 return;
             }
 
             _reconnectAttempts++;
-            var delay = TimeSpan.FromSeconds(Math.Pow(2, _reconnectAttempts));
-            Debug.WriteLine($"Reconnecting in {delay.TotalSeconds}s (attempt {_reconnectAttempts})");
+            var delay = TimeSpan.FromSeconds(Math.Min(Math.Pow(2, _reconnectAttempts), 30));
+
+            Debug.WriteLine($"[LIVE-STREAM] Reconnecting in {delay.TotalSeconds}s (attempt {_reconnectAttempts})");
 
             await Task.Delay(delay);
             if (!_isConnected && !_isDisposed)
@@ -660,10 +684,11 @@ namespace monitor_desktop.Services
         public void UpdateFps(int fps)
         {
             _targetFps = Math.Clamp(fps, 1, 30);
+            _frameIntervalMs = 1000 / _targetFps;
+
             if (_isStreaming && _frameTimer != null)
             {
-                int intervalMs = 1000 / _targetFps;
-                _frameTimer.Change(0, intervalMs);
+                _frameTimer.Change(0, _frameIntervalMs);
             }
         }
 
@@ -676,28 +701,25 @@ namespace monitor_desktop.Services
             _keepAliveTimer?.Dispose();
             _keepAliveTimer = null;
 
-            if (_webSocket?.State == WebSocketState.Open)
+            if (_webSocket?.State == WebSocketState.Open && _isStompConnected)
             {
                 try
                 {
-                    var disconnectFrame = new StringBuilder();
-                    disconnectFrame.AppendLine("DISCONNECT");
-                    disconnectFrame.AppendLine();
-                    disconnectFrame.Append("\0");
-                    await SendRawFrameAsync(disconnectFrame.ToString());
+                    var disconnectFrame = "DISCONNECT\r\n\r\n\0";
+                    await SendRawFrameAsync(disconnectFrame);
                     await Task.Delay(100);
                     await _webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Disconnecting", CancellationToken.None);
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"Error during disconnect: {ex.Message}");
+                    Debug.WriteLine($"[LIVE-STREAM] Disconnect error: {ex.Message}");
                 }
             }
 
             _cts?.Cancel();
             _webSocket?.Dispose();
             _isConnected = false;
-            _isSubscribed = false;
+            _isStompConnected = false;
         }
 
         public void Dispose()

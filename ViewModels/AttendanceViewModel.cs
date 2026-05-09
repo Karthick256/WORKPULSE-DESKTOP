@@ -8,6 +8,7 @@ using monitor_desktop.Models.Enums;
 using monitor_desktop.Services;
 using monitor_desktop.Helpers;
 using System.Windows.Input;
+using monitor_desktop.Views;
 
 namespace monitor_desktop.ViewModels
 {
@@ -26,9 +27,17 @@ namespace monitor_desktop.ViewModels
         private System.Timers.Timer _sessionTimer;
         private string _sessionDuration;
 
+        private bool _isOnBreak;
+        private BreakType _currentBreakType;
+        private string _breakStatus;
+        private System.Timers.Timer _breakTimer;
+        private string _breakDuration;
+
         public ICommand CheckInCommand { get; private set; }
         public ICommand CheckOutCommand { get; private set; }
         public ICommand RefreshCommand { get; private set; }
+        public ICommand StartBreakCommand { get; private set; }
+        public ICommand EndBreakCommand { get; private set; }
 
         public AttendanceSessionResponse CurrentSession
         {
@@ -56,8 +65,13 @@ namespace monitor_desktop.ViewModels
                 OnPropertyChanged(nameof(CheckOutButtonText));
                 OnPropertyChanged(nameof(CanCheckIn));
                 OnPropertyChanged(nameof(CanCheckOut));
+                OnPropertyChanged(nameof(CanStartBreak));
+                OnPropertyChanged(nameof(CanEndBreak));
+                OnPropertyChanged(nameof(BreakButtonText));
                 (CheckInCommand as RelayCommand)?.RaiseCanExecuteChanged();
                 (CheckOutCommand as RelayCommand)?.RaiseCanExecuteChanged();
+                (StartBreakCommand as RelayCommand)?.RaiseCanExecuteChanged();
+                (EndBreakCommand as RelayCommand)?.RaiseCanExecuteChanged();
                 CommandManager.InvalidateRequerySuggested();
 
                 if (_isCheckedIn)
@@ -76,13 +90,19 @@ namespace monitor_desktop.ViewModels
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(CanCheckIn));
                 OnPropertyChanged(nameof(CanCheckOut));
+                OnPropertyChanged(nameof(CanStartBreak));
+                OnPropertyChanged(nameof(CanEndBreak));
                 (CheckInCommand as RelayCommand)?.RaiseCanExecuteChanged();
                 (CheckOutCommand as RelayCommand)?.RaiseCanExecuteChanged();
+                (StartBreakCommand as RelayCommand)?.RaiseCanExecuteChanged();
+                (EndBreakCommand as RelayCommand)?.RaiseCanExecuteChanged();
             }
         }
 
         public bool CanCheckIn => !IsCheckedIn && !IsLoading;
         public bool CanCheckOut => IsCheckedIn && !IsLoading;
+        public bool CanStartBreak => IsCheckedIn && !IsOnBreak && !IsLoading;
+        public bool CanEndBreak => IsCheckedIn && IsOnBreak && !IsLoading;
 
         public string StatusMessage
         {
@@ -98,6 +118,35 @@ namespace monitor_desktop.ViewModels
 
         public string CheckInButtonText => IsCheckedIn ? "Checked In ✓" : "Check In";
         public string CheckOutButtonText => IsCheckedIn ? "Check Out" : "No Active Session";
+        public string BreakButtonText => IsOnBreak ? "On Break" : "Start Break";
+
+        public bool IsOnBreak
+        {
+            get => _isOnBreak;
+            set
+            {
+                if (_isOnBreak == value) return;
+                _isOnBreak = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(CanStartBreak));
+                OnPropertyChanged(nameof(CanEndBreak));
+                OnPropertyChanged(nameof(BreakButtonText));
+                (StartBreakCommand as RelayCommand)?.RaiseCanExecuteChanged();
+                (EndBreakCommand as RelayCommand)?.RaiseCanExecuteChanged();
+            }
+        }
+
+        public string BreakStatus
+        {
+            get => _breakStatus;
+            set { _breakStatus = value; OnPropertyChanged(); }
+        }
+
+        public string BreakDuration
+        {
+            get => _breakDuration;
+            set { _breakDuration = value; OnPropertyChanged(); }
+        }
 
         public AttendanceViewModel()
         {
@@ -106,14 +155,13 @@ namespace monitor_desktop.ViewModels
             _attendanceService = new AttendanceService(_apiClient);
             _activityTrackingService = new ActivityTrackingService(_apiClient);
             _tokenManager = tokenManager;
-
             _trackerService = ActivityTrackerService.GetInstance(_activityTrackingService, _tokenManager);
             _trackerService.StatusChanged += OnTrackerStatusChanged;
-
             CheckInCommand = new RelayCommand(async _ => await CheckIn(), _ => CanCheckIn);
             CheckOutCommand = new RelayCommand(async _ => await CheckOut(), _ => CanCheckOut);
             RefreshCommand = new RelayCommand(async _ => await LoadActiveSession());
-
+            StartBreakCommand = new RelayCommand(async _ => await StartBreak(), _ => CanStartBreak);
+            EndBreakCommand = new RelayCommand(async _ => await EndBreak(), _ => CanEndBreak);
             Application.Current?.Dispatcher.BeginInvoke(new Action(async () =>
             {
                 await LoadActiveSession();
@@ -145,7 +193,18 @@ namespace monitor_desktop.ViewModels
                         {
                             _trackerService.StartTracking(CurrentSession.SessionId.Value);
                         }
-                        StatusMessage = $"Active session since {CurrentSession.CheckInTime.Value:HH:mm:ss} - Tracking active";
+                        var isOnBreak = await _trackerService.CheckAndRestoreBreakState();
+                        IsOnBreak = isOnBreak;
+
+                        if (isOnBreak)
+                        {
+                            StatusMessage = "On break - Resuming tracking when break ends";
+                            StartBreakTimer();
+                        }
+                        else
+                        {
+                            StatusMessage = $"Active session since {CurrentSession.CheckInTime.Value:HH:mm:ss} - Tracking active";
+                        }
                     }
                     else if (IsCheckedIn && CurrentSession.CheckInTime.HasValue)
                     {
@@ -181,10 +240,8 @@ namespace monitor_desktop.ViewModels
         public async Task CheckIn()
         {
             if (IsCheckedIn || IsLoading) return;
-
             IsLoading = true;
             StatusMessage = "Checking in...";
-
             try
             {
                 var response = await _attendanceService.AutoCheckIn();
@@ -243,6 +300,12 @@ namespace monitor_desktop.ViewModels
         {
             if (!IsCheckedIn || IsLoading || CurrentSession?.SessionId == null) return;
 
+            // End break if on break
+            if (IsOnBreak)
+            {
+                await EndBreak();
+            }
+
             var confirm = MessageBox.Show(
                 "Are you sure you want to check out?\n\nActivity tracking will stop.",
                 "Confirm Check-Out", MessageBoxButton.YesNo, MessageBoxImage.Question);
@@ -267,6 +330,7 @@ namespace monitor_desktop.ViewModels
                     CurrentSession = response.Data;
                     IsCheckedIn = false;
                     StopSessionTimer();
+                    StopBreakTimer();
 
                     var mins = CurrentSession.TotalSessionMinutes ?? 0;
                     var duration = mins >= 60 ? $"{mins / 60}h {mins % 60}m" : $"{mins}m";
@@ -305,6 +369,106 @@ namespace monitor_desktop.ViewModels
             }
         }
 
+        private async Task StartBreak()
+        {
+            if (!CanStartBreak) return;
+
+            var breakWindow = new BreakSelectionWindow();
+            breakWindow.Owner = Application.Current.MainWindow;
+
+            if (breakWindow.ShowDialog() == true && breakWindow.BreakSelected)
+            {
+                IsLoading = true;
+                StatusMessage = $"Starting {GetBreakTypeName(breakWindow.SelectedBreakType)} break...";
+
+                try
+                {
+                    var success = await _trackerService.StartBreakAsync(
+                        breakWindow.SelectedBreakType,
+                        breakWindow.Notes);
+
+                    if (success)
+                    {
+                        IsOnBreak = true;
+                        _currentBreakType = breakWindow.SelectedBreakType;
+                        StatusMessage = $"On {GetBreakTypeName(breakWindow.SelectedBreakType)} break - Tracking paused";
+                        BreakStatus = $"On {GetBreakTypeName(breakWindow.SelectedBreakType)} break";
+                        StartBreakTimer();
+                        OnPropertyChanged(nameof(BreakButtonText));
+                    }
+                    else
+                    {
+                        StatusMessage = "Failed to start break. Please try again.";
+                        MessageBox.Show("Failed to start break. Please try again.",
+                            "Break Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    StatusMessage = $"Error starting break: {ex.Message}";
+                    MessageBox.Show($"Error starting break: {ex.Message}",
+                        "Break Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+                finally
+                {
+                    IsLoading = false;
+                }
+            }
+        }
+
+        private async Task EndBreak()
+        {
+            if (!CanEndBreak) return;
+
+            var confirm = MessageBox.Show(
+                $"End your {GetBreakTypeName(_currentBreakType)} break?",
+                "End Break",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question);
+
+            if (confirm != MessageBoxResult.Yes) return;
+
+            IsLoading = true;
+            StatusMessage = "Ending break...";
+
+            try
+            {
+                var success = await _trackerService.EndBreakAsync();
+
+                if (success)
+                {
+                    IsOnBreak = false;
+                    _currentBreakType = BreakType.SHORT_BREAK;
+                    StatusMessage = "Break ended - Tracking resumed";
+                    BreakStatus = string.Empty;
+                    StopBreakTimer();
+                    OnPropertyChanged(nameof(BreakButtonText));
+
+                    // Refresh session to get updated break minutes
+                    await LoadActiveSession();
+
+                    MessageBox.Show("Break ended successfully. Activity tracking has resumed.",
+                        "Break Ended", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+                else
+                {
+                    StatusMessage = "Failed to end break. Please try again.";
+                    MessageBox.Show("Failed to end break. Please try again or contact support.",
+                        "Break Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                StatusMessage = $"Error ending break: {ex.Message}";
+                MessageBox.Show($"Error ending break: {ex.Message}",
+                    "Break Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            finally
+            {
+                IsLoading = false;
+            }
+        }
+
         private void StartSessionTimer()
         {
             StopSessionTimer();
@@ -336,13 +500,61 @@ namespace monitor_desktop.ViewModels
             SessionDuration = $"{(int)duration.TotalHours:D2}:{duration.Minutes:D2}:{duration.Seconds:D2}";
         }
 
+        private void StartBreakTimer()
+        {
+            StopBreakTimer();
+            _breakTimer = new System.Timers.Timer(1000);
+            _breakTimer.AutoReset = true;
+            _breakTimer.Elapsed += (_, __) =>
+            {
+                Application.Current?.Dispatcher.Invoke(() => UpdateBreakDuration());
+            };
+            _breakTimer.Start();
+            UpdateBreakDuration();
+        }
+
+        private void StopBreakTimer()
+        {
+            if (_breakTimer != null)
+            {
+                _breakTimer.Stop();
+                _breakTimer.Dispose();
+                _breakTimer = null;
+            }
+            BreakDuration = string.Empty;
+        }
+
+        private void UpdateBreakDuration()
+        {
+            if (_trackerService.CurrentBreakStartTime.HasValue)
+            {
+                var duration = DateTime.Now - _trackerService.CurrentBreakStartTime.Value;
+                BreakDuration = $"Break duration: {(int)duration.TotalHours:D2}:{duration.Minutes:D2}:{duration.Seconds:D2}";
+            }
+        }
+
+        private string GetBreakTypeName(BreakType type)
+        {
+            return type switch
+            {
+                BreakType.LUNCH => "Lunch",
+                BreakType.SHORT_BREAK => "Short",
+                BreakType.LONG_BREAK => "Long",
+                BreakType.MEETING => "Meeting",
+                BreakType.TRAINING => "Training",
+                BreakType.PERSONAL => "Personal",
+                _ => "Break"
+            };
+        }
+
         public void Dispose()
         {
+            StopSessionTimer();
+            StopBreakTimer();
             if (_trackerService != null)
             {
                 _trackerService.StatusChanged -= OnTrackerStatusChanged;
             }
-            StopSessionTimer();
         }
 
         public event PropertyChangedEventHandler PropertyChanged;

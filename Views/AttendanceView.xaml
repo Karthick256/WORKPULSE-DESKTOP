@@ -170,6 +170,83 @@
 
                 <Button Content="{Binding CheckInButtonText}" Command="{Binding CheckInCommand}" Style="{StaticResource SuccessButton}" IsEnabled="{Binding CanCheckIn}" Margin="0,0,0,10"/>
                 <Button Content="{Binding CheckOutButtonText}" Command="{Binding CheckOutCommand}" Style="{StaticResource DangerButton}" IsEnabled="{Binding CanCheckOut}" Margin="0,0,0,10"/>
+                <Button Content="{Binding BreakButtonText}" 
+        Command="{Binding StartBreakCommand}" 
+        CommandParameter="{Binding SelectedBreakType}"
+        Background="#F59E0B" 
+        Foreground="White" 
+        FontSize="13" 
+        FontWeight="SemiBold" 
+        Height="42" 
+        Margin="0,0,0,10"
+        Cursor="Hand"
+        BorderThickness="0"
+        Visibility="{Binding IsCheckedIn, Converter={StaticResource BoolToVis}}">
+                    <Button.Style>
+                        <Style TargetType="Button">
+                            <Setter Property="Background" Value="#F59E0B"/>
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border x:Name="Bd" CornerRadius="10" Background="{TemplateBinding Background}">
+                                            <Border.Effect>
+                                                <DropShadowEffect Color="#F59E0B" BlurRadius="12" ShadowDepth="0" Opacity="0.3"/>
+                                            </Border.Effect>
+                                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="Bd" Property="Background" Value="#D97706"/>
+                                            </Trigger>
+                                            <Trigger Property="IsEnabled" Value="False">
+                                                <Setter TargetName="Bd" Property="Background" Value="#CBD5E1"/>
+                                                <Setter Property="Foreground" Value="#F1F5F9"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsOnBreak}" Value="True">
+                                    <Setter Property="Background" Value="#EF4444"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
+                <TextBlock Text="{Binding BreakDuration}" 
+           FontSize="11" 
+           Foreground="#F59E0B"
+           HorizontalAlignment="Center"
+           Margin="0,5,0,0"
+           Visibility="{Binding IsOnBreak, Converter={StaticResource BoolToVis}}"/>
+                <Button Content="End Break" 
+        Command="{Binding EndBreakCommand}" 
+        Background="#EF4444" 
+        Foreground="White" 
+        FontSize="13" 
+        FontWeight="SemiBold" 
+        Height="42" 
+        Margin="0,0,0,10"
+        Cursor="Hand"
+        BorderThickness="0"
+        Visibility="{Binding IsOnBreak, Converter={StaticResource BoolToVis}}">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="Bd" CornerRadius="10" Background="#EF4444">
+                                <Border.Effect>
+                                    <DropShadowEffect Color="#EF4444" BlurRadius="12" ShadowDepth="0" Opacity="0.3"/>
+                                </Border.Effect>
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="Bd" Property="Background" Value="#DC2626"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
                 <ProgressBar IsIndeterminate="True" Visibility="{Binding IsLoading, Converter={StaticResource BoolToVis}}" Foreground="{StaticResource AccentBlue}" Background="Transparent" Height="2" Margin="0,16,0,0"/>
             </StackPanel>
         </Border>

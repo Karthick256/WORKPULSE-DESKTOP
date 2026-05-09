@@ -60,6 +60,12 @@ namespace monitor_desktop.Services
         private Timer _idleCheckTimer;
         private bool _isTrackingPaused;
 
+        private long? _currentBreakId;
+        private DateTime? _currentBreakStartTime;
+        private BreakType _currentBreakType;
+        private bool _isOnBreak;
+        private readonly object _breakLock = new object();
+
         private string _currentAppName;
         private string _currentWindowTitle;
         private DateTime _currentAppStartTime;
@@ -91,6 +97,10 @@ namespace monitor_desktop.Services
 
         private int _idleThresholdSeconds = 120;
         private bool _isSystemSleeping;
+
+        public bool IsOnBreak => _isOnBreak;
+        public long? CurrentBreakId => _currentBreakId;
+        public DateTime? CurrentBreakStartTime => _currentBreakStartTime;
 
         private Timer _heartbeatTimer;
         private Timer _browserUrlCheckTimer;
@@ -334,11 +344,19 @@ namespace monitor_desktop.Services
 
         private void CheckIdleState()
         {
+            if (_isOnBreak)
+            {
+                if (_isIdle)
+                {
+                    _isIdle = false;
+                    ResumeTrackingAfterIdle();
+                }
+                return;
+            }
             uint systemIdleTimeMs = GetIdleTime();
             double systemIdleSeconds = systemIdleTimeMs / 1000.0;
             var manualIdleTime = DateTime.Now - _lastActivityTime;
             double effectiveIdleSeconds = Math.Max(systemIdleSeconds, manualIdleTime.TotalSeconds);
-
             if (!_isIdle && effectiveIdleSeconds >= _idleThresholdSeconds)
             {
                 _isIdle = true;
@@ -350,6 +368,7 @@ namespace monitor_desktop.Services
                 ResetIdleState();
             }
         }
+
 
         private async Task SendIdlePeriodAsync(DateTime startTime, DateTime endTime, int durationSeconds)
         {
@@ -375,6 +394,237 @@ namespace monitor_desktop.Services
         }
         #endregion
 
+        public async Task<bool> StartBreakAsync(BreakType breakType, string notes = null)
+        {
+            if (!_isTracking || _currentSessionId == 0)
+            {
+                StatusChanged?.Invoke(this, "[BREAK] Error: No active session");
+                return false;
+            }
+
+            if (_isOnBreak)
+            {
+                StatusChanged?.Invoke(this, "[BREAK] Already on break");
+                return false;
+            }
+
+            lock (_breakLock)
+            {
+                _isTrackingPaused = true;
+                _isAppTrackingPaused = true;
+                _isBrowserTrackingPaused = true;
+                _isUrlTrackingPaused = true;
+                _isOnBreak = true;
+                _currentBreakStartTime = DateTime.Now;
+                _currentBreakType = breakType;
+            }
+
+            try
+            {
+                var request = new BreakStartRequest
+                {
+                    SessionId = _currentSessionId,
+                    BreakType = breakType,
+                    TriggerReason = BreakTrigger.MANUAL,
+                    Notes = notes ?? string.Empty,
+                    IsPlanned = true
+                };
+
+                var response = await _trackingService.StartBreak(request);
+
+                if (response.Status == 200 && response.Data != null)
+                {
+                    _currentBreakId = response.Data.Id;
+                    StatusChanged?.Invoke(this, $"[BREAK] Started {GetBreakTypeName(breakType)} break");
+                    return true;
+                }
+                else
+                {
+                    // Rollback on failure
+                    lock (_breakLock)
+                    {
+                        _isTrackingPaused = false;
+                        _isAppTrackingPaused = false;
+                        _isBrowserTrackingPaused = false;
+                        _isUrlTrackingPaused = false;
+                        _isOnBreak = false;
+                        _currentBreakStartTime = null;
+                        _currentBreakId = null;
+                    }
+                    StatusChanged?.Invoke(this, $"[BREAK] Failed to start break: {response.Message}");
+                    return false;
+                }
+            }
+            catch (Exception ex)
+            {
+                lock (_breakLock)
+                {
+                    _isTrackingPaused = false;
+                    _isAppTrackingPaused = false;
+                    _isBrowserTrackingPaused = false;
+                    _isUrlTrackingPaused = false;
+                    _isOnBreak = false;
+                    _currentBreakStartTime = null;
+                    _currentBreakId = null;
+                }
+                StatusChanged?.Invoke(this, $"[BREAK] Error starting break: {ex.Message}");
+                return false;
+            }
+        }
+
+        public async Task<bool> EndBreakAsync()
+        {
+            if (!_isTracking || _currentSessionId == 0)
+            {
+                StatusChanged?.Invoke(this, "[BREAK] Error: No active session");
+                return false;
+            }
+
+            if (!_isOnBreak || !_currentBreakId.HasValue)
+            {
+                var activeBreak = await _trackingService.GetMyActiveBreak();
+                if (activeBreak?.Status == 200 && activeBreak.Data != null)
+                {
+                    _currentBreakId = activeBreak.Data.Id;
+                    _currentBreakStartTime = activeBreak.Data.BreakStart;
+                    _currentBreakType = activeBreak.Data.BreakType;
+
+                    lock (_breakLock)
+                    {
+                        _isTrackingPaused = true;
+                        _isAppTrackingPaused = true;
+                        _isBrowserTrackingPaused = true;
+                        _isUrlTrackingPaused = true;
+                        _isOnBreak = true;
+                    }
+                    StatusChanged?.Invoke(this, $"[BREAK] Restored break state from server");
+                }
+                else
+                {
+                    return false;
+                }
+            }
+
+            try
+            {
+                var response = await _trackingService.EndMyBreak();
+
+                if (response.Status == 200)
+                {
+                    var breakDuration = (int)(DateTime.Now - _currentBreakStartTime.Value).TotalSeconds;
+                    StatusChanged?.Invoke(this, $"[BREAK] Ended break after {FormatBreakDuration(breakDuration)}");
+                    lock (_breakLock)
+                    {
+                        _isTrackingPaused = false;
+                        _isAppTrackingPaused = false;
+                        _isBrowserTrackingPaused = false;
+                        _isUrlTrackingPaused = false;
+                        _isOnBreak = false;
+                        _currentBreakId = null;
+                        _currentBreakStartTime = null;
+                    }
+
+                    _lastActivityTime = DateTime.Now;
+
+                    return true;
+                }
+                else
+                {
+                    StatusChanged?.Invoke(this, $"[BREAK] Failed to end break: {response.Message}");
+                    return false;
+                }
+            }
+            catch (Exception ex)
+            {
+                StatusChanged?.Invoke(this, $"[BREAK] Error ending break: {ex.Message}");
+                return false;
+            }
+        }
+
+        public async Task<bool> CheckAndRestoreBreakState()
+        {
+            if (!_isTracking || _currentSessionId == 0) return false;
+
+            try
+            {
+                var response = await _trackingService.GetMyActiveBreak();
+
+                if (response.Status == 200 && response.Data != null)
+                {
+                    var activeBreak = response.Data;
+
+                    if (!_isOnBreak)
+                    {
+                        lock (_breakLock)
+                        {
+                            _isTrackingPaused = true;
+                            _isAppTrackingPaused = true;
+                            _isBrowserTrackingPaused = true;
+                            _isUrlTrackingPaused = true;
+                            _isOnBreak = true;
+                            _currentBreakId = activeBreak.Id;
+                            _currentBreakStartTime = activeBreak.BreakStart;
+                            _currentBreakType = activeBreak.BreakType;
+                        }
+                        StatusChanged?.Invoke(this, $"[BREAK] Restored break state: {GetBreakTypeName(_currentBreakType)}");
+                        return true;
+                    }
+                    else if (_currentBreakId != activeBreak.Id)
+                    {
+                        // Sync break ID if different
+                        _currentBreakId = activeBreak.Id;
+                        _currentBreakStartTime = activeBreak.BreakStart;
+                        _currentBreakType = activeBreak.BreakType;
+                        return true;
+                    }
+                    return true;
+                }
+                else if (_isOnBreak)
+                {
+                    // Local says on break but server doesn't - sync state
+                    lock (_breakLock)
+                    {
+                        _isTrackingPaused = false;
+                        _isAppTrackingPaused = false;
+                        _isBrowserTrackingPaused = false;
+                        _isUrlTrackingPaused = false;
+                        _isOnBreak = false;
+                        _currentBreakId = null;
+                        _currentBreakStartTime = null;
+                    }
+                    StatusChanged?.Invoke(this, "[BREAK] Break state synchronized with server");
+                    return false;
+                }
+
+                return _isOnBreak;
+            }
+            catch (Exception ex)
+            {
+                return _isOnBreak;
+            }
+        }
+
+        private string GetBreakTypeName(BreakType type)
+        {
+            return type switch
+            {
+                BreakType.LUNCH => "Lunch",
+                BreakType.SHORT_BREAK => "Short",
+                BreakType.LONG_BREAK => "Long",
+                BreakType.MEETING => "Meeting",
+                BreakType.TRAINING => "Training",
+                BreakType.PERSONAL => "Personal",
+                _ => "Break"
+            };
+        }
+
+        private string FormatBreakDuration(int seconds)
+        {
+            var minutes = seconds / 60;
+            var remainingSeconds = seconds % 60;
+            return minutes > 0 ? $"{minutes}m {remainingSeconds}s" : $"{seconds}s";
+        }
+
         #region Browser URL Extraction - ENHANCED
         private bool IsBrowserProcess(string processName)
         {
@@ -390,7 +640,7 @@ namespace monitor_desktop.Services
                 "brave",
                 "chromium",
                 "browser",
-                "iexplore"  // Added Internet Explorer support
+                "iexplore"
             };
 
             return browsers.Any(b => processName.Contains(b));
@@ -409,20 +659,17 @@ namespace monitor_desktop.Services
             if (processName.Contains("chromium")) return "Chromium";
             if (processName.Contains("iexplore")) return "Internet Explorer";
 
-            return processName; // Return original name if no match
+            return processName;
         }
 
         private string GetBrowserUrl(IntPtr hWnd, string browserType)
         {
             if (hWnd == IntPtr.Zero || string.IsNullOrEmpty(browserType))
                 return null;
-
-            // Check cache first to reduce CPU usage
             string cacheKey = $"{hWnd}_{browserType}";
             if (_urlCache.ContainsKey(cacheKey))
             {
                 var cachedUrl = _urlCache[cacheKey];
-                // Cache invalidation after 5 seconds
                 if ((DateTime.Now - _lastUrlCheckTime).TotalSeconds < 5)
                 {
                     return cachedUrl;
@@ -432,38 +679,31 @@ namespace monitor_desktop.Services
             try
             {
                 string url = null;
-
-                // Method 1: Direct UI Automation for Chromium-based browsers
                 if (browserType.Contains("chrome") || browserType.Contains("edge") ||
                     browserType.Contains("chromium") || browserType.Contains("brave"))
                 {
                     url = GetChromiumUrl(hWnd);
                 }
-                // Method 2: Firefox specific extraction
                 else if (browserType.Contains("firefox"))
                 {
                     url = GetFirefoxUrl(hWnd);
                 }
 
-                // Method 3: Generic extraction if previous methods failed
                 if (string.IsNullOrEmpty(url))
                 {
                     url = GetGenericBrowserUrl(hWnd);
                 }
 
-                // Method 4: Extract from window title as last resort
                 if (string.IsNullOrEmpty(url))
                 {
                     var title = GetWindowTitle(hWnd);
                     url = ExtractUrlFromTitle(title);
                 }
 
-                // Cache the result
                 if (!string.IsNullOrEmpty(url))
                 {
                     _urlCache[cacheKey] = url;
                     _lastUrlCheckTime = DateTime.Now;
-                    Debug.WriteLine($"[URL TRACKING] Found URL for {browserType}: {url}");
                 }
                 else
                 {
@@ -474,7 +714,6 @@ namespace monitor_desktop.Services
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[URL TRACKING ERROR] {browserType}: {ex.Message}");
                 return null;
             }
         }
@@ -486,19 +725,15 @@ namespace monitor_desktop.Services
                 var element = AutomationElement.FromHandle(hWnd);
                 if (element == null)
                 {
-                    Debug.WriteLine("[URL TRACKING] AutomationElement is null for Chromium window");
                     return null;
                 }
 
-                // Try multiple methods to find the address bar
                 var url = GetUrlFromEditControl(element);
                 if (!string.IsNullOrEmpty(url)) return url;
 
-                // Try to find URL in child windows
                 url = GetUrlFromChildWindows(hWnd);
                 if (!string.IsNullOrEmpty(url)) return url;
-
-                // Try to get URL from any text element containing http/https
+       
                 url = GetUrlFromAnyTextElement(element);
                 if (!string.IsNullOrEmpty(url)) return url;
 
@@ -506,7 +741,6 @@ namespace monitor_desktop.Services
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[URL TRACKING] Chromium URL extraction error: {ex.Message}");
                 return null;
             }
         }
@@ -515,7 +749,6 @@ namespace monitor_desktop.Services
         {
             try
             {
-                // Search for edit controls (address bar)
                 var editControls = parentElement.FindAll(
                     TreeScope.Descendants,
                     new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Edit));
@@ -524,7 +757,6 @@ namespace monitor_desktop.Services
                 {
                     try
                     {
-                        // Try ValuePattern
                         if (editControl.TryGetCurrentPattern(ValuePattern.Pattern, out object valuePatternObj))
                         {
                             var valuePattern = valuePatternObj as ValuePattern;
@@ -533,13 +765,10 @@ namespace monitor_desktop.Services
                                 var text = valuePattern.Current.Value;
                                 if (!string.IsNullOrEmpty(text) && IsValidUrl(text))
                                 {
-                                    Debug.WriteLine($"[URL TRACKING] Found URL via ValuePattern: {text}");
                                     return text;
                                 }
                             }
                         }
-
-                        // Try TextPattern
                         if (editControl.TryGetCurrentPattern(TextPattern.Pattern, out object textPatternObj))
                         {
                             var textPattern = textPatternObj as TextPattern;
@@ -551,18 +780,14 @@ namespace monitor_desktop.Services
                                     var url = ExtractUrlFromText(text);
                                     if (!string.IsNullOrEmpty(url))
                                     {
-                                        Debug.WriteLine($"[URL TRACKING] Found URL via TextPattern: {url}");
                                         return url;
                                     }
                                 }
                             }
                         }
-
-                        // Check Name property
                         var name = editControl.Current.Name;
                         if (!string.IsNullOrEmpty(name) && IsValidUrl(name))
                         {
-                            Debug.WriteLine($"[URL TRACKING] Found URL via Name property: {name}");
                             return name;
                         }
                     }
@@ -576,7 +801,6 @@ namespace monitor_desktop.Services
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[URL TRACKING] Error searching edit controls: {ex.Message}");
                 return null;
             }
         }
@@ -587,8 +811,6 @@ namespace monitor_desktop.Services
             {
                 string foundUrl = null;
                 var childWindows = new List<IntPtr>();
-
-                // Find all child windows
                 EnumChildWindows(parentHwnd, (hWnd, lParam) =>
                 {
                     if (IsWindowVisible(hWnd))
@@ -597,8 +819,6 @@ namespace monitor_desktop.Services
                     }
                     return true;
                 }, IntPtr.Zero);
-
-                // Try to extract URL from each child window
                 foreach (var childHwnd in childWindows)
                 {
                     try
@@ -621,7 +841,6 @@ namespace monitor_desktop.Services
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[URL TRACKING] Error searching child windows: {ex.Message}");
                 return null;
             }
         }
@@ -630,7 +849,6 @@ namespace monitor_desktop.Services
         {
             try
             {
-                // Search for any element that might contain a URL
                 var allElements = parentElement.FindAll(
                     TreeScope.Descendants,
                     System.Windows.Automation.Condition.TrueCondition);
@@ -639,7 +857,6 @@ namespace monitor_desktop.Services
                 {
                     try
                     {
-                        // Check if element supports TextPattern
                         if (element.TryGetCurrentPattern(TextPattern.Pattern, out object textPatternObj))
                         {
                             var textPattern = textPatternObj as TextPattern;
@@ -651,21 +868,17 @@ namespace monitor_desktop.Services
                                     var url = ExtractUrlFromText(text);
                                     if (!string.IsNullOrEmpty(url))
                                     {
-                                        Debug.WriteLine($"[URL TRACKING] Found URL in text element: {url}");
                                         return url;
                                     }
                                 }
                             }
                         }
-
-                        // Check Name property
                         var name = element.Current.Name;
                         if (!string.IsNullOrEmpty(name))
                         {
                             var url = ExtractUrlFromText(name);
                             if (!string.IsNullOrEmpty(url))
                             {
-                                Debug.WriteLine($"[URL TRACKING] Found URL in element name: {url}");
                                 return url;
                             }
                         }
@@ -677,7 +890,6 @@ namespace monitor_desktop.Services
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[URL TRACKING] Error searching text elements: {ex.Message}");
                 return null;
             }
         }
@@ -686,11 +898,8 @@ namespace monitor_desktop.Services
         {
             try
             {
-                // Last resort: Try to get URL from any browser window using multiple approaches
                 var element = AutomationElement.FromHandle(hWnd);
                 if (element == null) return null;
-
-                // Try all available patterns
                 var availablePatterns = element.GetSupportedPatterns();
                 foreach (var pattern in availablePatterns)
                 {
@@ -706,8 +915,6 @@ namespace monitor_desktop.Services
                     }
                     catch { }
                 }
-
-                // Check window title again
                 var title = element.Current.Name;
                 if (!string.IsNullOrEmpty(title))
                 {
@@ -720,7 +927,6 @@ namespace monitor_desktop.Services
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[URL TRACKING] Generic URL extraction error: {ex.Message}");
                 return null;
             }
         }
@@ -731,8 +937,6 @@ namespace monitor_desktop.Services
             {
                 var element = AutomationElement.FromHandle(hWnd);
                 if (element == null) return null;
-
-                // Firefox specific address bar identification
                 var conditions = new List<System.Windows.Automation.Condition>
                 {
                     new AndCondition(
@@ -751,7 +955,6 @@ namespace monitor_desktop.Services
                     var addressBar = element.FindFirst(TreeScope.Descendants, condition);
                     if (addressBar == null)
                     {
-                        // Try children
                         addressBar = element.FindFirst(TreeScope.Children, condition);
                     }
 
@@ -765,20 +968,16 @@ namespace monitor_desktop.Services
                                 var url = valuePattern.Current.Value;
                                 if (!string.IsNullOrEmpty(url) && IsValidUrl(url))
                                 {
-                                    Debug.WriteLine($"[URL TRACKING] Found Firefox URL: {url}");
                                     return url;
                                 }
                             }
                         }
                     }
                 }
-
-                // Try generic extraction for Firefox
                 return GetUrlFromEditControl(element) ?? GetUrlFromChildWindows(hWnd);
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[URL TRACKING] Firefox URL extraction error: {ex.Message}");
                 return null;
             }
         }
@@ -804,8 +1003,6 @@ namespace monitor_desktop.Services
         private string ExtractUrlFromText(string text)
         {
             if (string.IsNullOrEmpty(text)) return null;
-
-            // Extract URL using regex
             var urlPattern = @"(https?://[^\s]+)";
             var match = System.Text.RegularExpressions.Regex.Match(text, urlPattern,
                 System.Text.RegularExpressions.RegexOptions.IgnoreCase);
@@ -814,8 +1011,6 @@ namespace monitor_desktop.Services
             {
                 return match.Groups[1].Value.TrimEnd('/', ' ', ')', ']');
             }
-
-            // Try www pattern if no http/https found
             var wwwPattern = @"(www\.[^\s]+\.[^\s]+)";
             match = System.Text.RegularExpressions.Regex.Match(text, wwwPattern);
 
@@ -830,8 +1025,6 @@ namespace monitor_desktop.Services
         private bool IsValidUrl(string url)
         {
             if (string.IsNullOrEmpty(url)) return false;
-
-            // Check if it looks like a URL
             return url.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
                    url.StartsWith("https://", StringComparison.OrdinalIgnoreCase) ||
                    url.StartsWith("www.", StringComparison.OrdinalIgnoreCase) ||
@@ -844,8 +1037,6 @@ namespace monitor_desktop.Services
             try
             {
                 if (string.IsNullOrEmpty(url)) return "unknown";
-
-                // Add protocol if missing
                 if (!url.StartsWith("http"))
                 {
                     url = "https://" + url;
@@ -856,7 +1047,6 @@ namespace monitor_desktop.Services
             }
             catch
             {
-                // Manual extraction
                 var domain = url;
                 if (domain.Contains("://"))
                     domain = domain.Split(new[] { "://" }, StringSplitOptions.None)[1];
@@ -898,8 +1088,6 @@ namespace monitor_desktop.Services
         private string ExtractUrlFromTitle(string windowTitle)
         {
             if (string.IsNullOrEmpty(windowTitle)) return null;
-
-            // First try to extract full URL
             var patterns = new[] { "http://", "https://", "www." };
 
             foreach (var pattern in patterns)
@@ -908,7 +1096,6 @@ namespace monitor_desktop.Services
                 if (index >= 0)
                 {
                     var url = windowTitle.Substring(index);
-                    // Find the end of the URL (space, dash, or pipe typically separates it from the page title)
                     var endIndex = url.IndexOf(" - ", StringComparison.OrdinalIgnoreCase);
                     if (endIndex > 0)
                         url = url.Substring(0, endIndex);
@@ -1009,8 +1196,6 @@ namespace monitor_desktop.Services
                 _currentWindowTitle = windowTitle;
                 _currentAppStartTime = DateTime.Now;
                 _currentAppFocusCount = 1;
-
-                Debug.WriteLine($"[APP TRACKING] New application: {processName} - {windowTitle}");
             }
             else
             {
@@ -1043,7 +1228,6 @@ namespace monitor_desktop.Services
                 };
 
                 await _trackingService.SaveApplicationUsage(request);
-                Debug.WriteLine($"[APP TRACKING] Saved app usage: {_currentAppName} ({durationSeconds}s)");
             }
 
             _currentAppName = null;
@@ -1091,53 +1275,41 @@ namespace monitor_desktop.Services
         {
             if (_isBrowserTrackingPaused)
             {
-                Debug.WriteLine("[BROWSER TRACKING] Tracking is paused");
                 return;
             }
 
             string browserName = GetBrowserNameFromProcess(processName);
-            Debug.WriteLine($"[BROWSER TRACKING] Processing {browserName} - Title: {windowTitle}");
 
             string currentUrl = GetBrowserUrl(handle, processName);
 
             if (string.IsNullOrEmpty(currentUrl))
             {
                 currentUrl = ExtractUrlFromTitle(windowTitle);
-                Debug.WriteLine($"[BROWSER TRACKING] URL from title: {(currentUrl ?? "Not found")}");
 
                 if (string.IsNullOrEmpty(currentUrl))
                 {
-                    // Still track browser activity even without URL
                     Debug.WriteLine($"[BROWSER TRACKING] No URL found for {browserName} window");
                 }
             }
 
             string domain = !string.IsNullOrEmpty(currentUrl) ? ExtractDomain(currentUrl) : null;
 
-            // Handle browser change
             if (!_isBrowserActive || _currentBrowserName != browserName)
             {
-                Debug.WriteLine($"[BROWSER TRACKING] Browser changed to {browserName}");
-
                 if (_isBrowserActive)
                 {
                     await SaveCurrentBrowserAndPendingUrls();
                 }
-
                 _isBrowserActive = true;
                 _currentBrowserName = browserName;
                 _currentBrowserStartTime = DateTime.Now;
                 _currentBrowserTempId = DateTime.Now.Ticks;
                 _pendingUrlVisits.Clear();
-
-                // Clear URL cache for new browser session
                 _urlCache.Clear();
             }
 
-            // Handle URL change
             if (!_isUrlTrackingPaused && !string.IsNullOrEmpty(currentUrl) && _currentUrl != currentUrl)
             {
-                Debug.WriteLine($"[URL TRACKING] URL changed from {_currentUrl} to {currentUrl}");
 
                 if (!string.IsNullOrEmpty(_currentUrl))
                 {
@@ -1146,8 +1318,6 @@ namespace monitor_desktop.Services
 
                     if (durationSeconds > 0)
                     {
-                        Debug.WriteLine($"[URL TRACKING] Saving previous URL visit: {_currentUrl} ({durationSeconds}s)");
-
                         var urlRequest = new BrowserUrlVisitRequest
                         {
                             SessionId = _currentSessionId,
@@ -1167,7 +1337,6 @@ namespace monitor_desktop.Services
 
                             if (response.Status != 200 && response.Status != 201)
                             {
-                                Debug.WriteLine($"[URL TRACKING] Failed to save URL visit, adding to pending list");
                                 var pendingVisit = new PendingUrlVisit
                                 {
                                     Url = _currentUrl,
@@ -1189,8 +1358,6 @@ namespace monitor_desktop.Services
                         }
                         catch (Exception ex)
                         {
-                            Debug.WriteLine($"[URL TRACKING ERROR] Failed to save URL visit: {ex.Message}");
-                            // Add to pending list on error
                             var pendingVisit = new PendingUrlVisit
                             {
                                 Url = _currentUrl,
@@ -1212,8 +1379,6 @@ namespace monitor_desktop.Services
                 _currentUrlTitle = windowTitle;
                 _currentUrlDomain = domain;
                 _currentUrlStartTime = DateTime.Now;
-
-                Debug.WriteLine($"[URL TRACKING] New URL started: {currentUrl} (Domain: {domain})");
             }
         }
 
@@ -1221,11 +1386,8 @@ namespace monitor_desktop.Services
         {
             if (!_isBrowserActive || string.IsNullOrEmpty(_currentBrowserName))
             {
-                Debug.WriteLine("[BROWSER TRACKING] No active browser to save");
                 return;
             }
-
-            Debug.WriteLine($"[BROWSER TRACKING] Saving browser session: {_currentBrowserName}");
 
             var endTime = DateTime.Now;
             var durationSeconds = (int)(endTime - _currentBrowserStartTime).TotalSeconds;
@@ -1245,7 +1407,6 @@ namespace monitor_desktop.Services
                 try
                 {
                     await _trackingService.SaveBrowserUsage(browserRequest);
-                    Debug.WriteLine($"[BROWSER TRACKING] Saved browser usage: {_currentBrowserName} ({durationSeconds}s)");
                 }
                 catch (Exception ex)
                 {
@@ -1253,8 +1414,6 @@ namespace monitor_desktop.Services
                 }
             }
 
-            // Save all pending URL visits
-            Debug.WriteLine($"[URL TRACKING] Saving {_pendingUrlVisits.Count} pending URL visits");
             foreach (var visit in _pendingUrlVisits)
             {
                 try
@@ -1271,9 +1430,7 @@ namespace monitor_desktop.Services
                         IsProductive = visit.IsProductive,
                         VisitCount = visit.VisitCount
                     };
-
                     await _trackingService.SaveBrowserUrlVisit(urlRequest);
-                    Debug.WriteLine($"[URL TRACKING] Saved pending URL: {visit.Url}");
                 }
                 catch (Exception ex)
                 {
@@ -1281,7 +1438,6 @@ namespace monitor_desktop.Services
                 }
             }
 
-            // Save current URL if exists
             if (!string.IsNullOrEmpty(_currentUrl))
             {
                 var currentDuration = (int)(endTime - _currentUrlStartTime).TotalSeconds;
@@ -1303,7 +1459,6 @@ namespace monitor_desktop.Services
                         };
 
                         await _trackingService.SaveBrowserUrlVisit(currentUrlRequest);
-                        Debug.WriteLine($"[URL TRACKING] Saved current URL: {_currentUrl} ({currentDuration}s)");
                     }
                     catch (Exception ex)
                     {
@@ -1312,7 +1467,6 @@ namespace monitor_desktop.Services
                 }
             }
 
-            // Reset state
             _isBrowserActive = false;
             _currentBrowserName = null;
             _currentBrowserTempId = null;
@@ -1496,12 +1650,12 @@ namespace monitor_desktop.Services
         {
             HashSet<int> specialKeys = new HashSet<int>
             {
-                0x10, 0x11, 0x12, 0x5B, 0x5C, // Shift, Ctrl, Alt, Win
-                0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, // Page up/down, End, Home, Arrows
-                0x2E, 0x08, 0x0D, 0x1B, 0x09, // Delete, Backspace, Enter, Escape, Tab
-                0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7A, 0x7B, // F1-F12
-                0x14, 0x90, 0x91, 0x2C, 0x13, // Caps Lock, Num Lock, Scroll Lock, Print Screen, Pause
-                0xAE, 0xAF, 0xAD, 0xB3, 0xB1, 0xB0, // Volume, Media keys
+                0x10, 0x11, 0x12, 0x5B, 0x5C,
+                0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28,
+                0x2E, 0x08, 0x0D, 0x1B, 0x09,
+                0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7A, 0x7B,
+                0x14, 0x90, 0x91, 0x2C, 0x13,
+                0xAE, 0xAF, 0xAD, 0xB3, 0xB1, 0xB0,
             };
             return specialKeys.Contains(vkCode);
         }
@@ -1584,9 +1738,7 @@ namespace monitor_desktop.Services
             lock (_lockObject)
             {
                 if (_isTracking) StopTrackingAsync(false).Wait();
-
                 if (idleThresholdSeconds.HasValue) _idleThresholdSeconds = idleThresholdSeconds.Value;
-
                 _currentSessionId = sessionId;
                 _isTracking = true;
                 _lastActivityTime = DateTime.Now;
@@ -1619,10 +1771,7 @@ namespace monitor_desktop.Services
                 _isBrowserActive = false;
                 _pendingUrlVisits.Clear();
                 _urlCache.Clear();
-
                 _screenshotCaptureService?.StartPolling(sessionId);
-
-                // CREATE LiveScreenService HERE with the correct session ID
                 if (_liveScreenService == null)
                 {
                     _liveScreenService = new LiveScreenStreamingService(
@@ -1635,8 +1784,6 @@ namespace monitor_desktop.Services
                     _liveScreenService.ErrorOccurred += OnLiveScreenError;
                     _liveScreenService.StreamingStatusChanged += OnLiveScreenStreamingStatusChanged;
                 }
-
-                // Start live screen streaming service
                 _ = Task.Run(async () =>
                 {
                     if (_liveScreenService != null)
@@ -1645,10 +1792,8 @@ namespace monitor_desktop.Services
                     }
                 });
             }
-
             _keyboardProc = KeyboardHookCallback;
             _mouseProc = MouseHookCallback;
-
             try
             {
                 using (var curProcess = Process.GetCurrentProcess())
@@ -1662,13 +1807,10 @@ namespace monitor_desktop.Services
             {
                 Debug.WriteLine($"Error setting up hooks: {ex.Message}");
             }
-
             StartWindowMonitoring();
             StartMouseKeyboardTimer();
             _idleCheckTimer = new Timer(_ => CheckIdleState(), null, 1000, 1000);
             _heartbeatTimer = new Timer(HeartbeatCallback, null, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));
-
-            Debug.WriteLine($"[TRACKING] Started tracking with session ID: {sessionId}");
         }
 
         private void HeartbeatCallback(object state)
@@ -1678,28 +1820,24 @@ namespace monitor_desktop.Services
 
         public async Task StopTrackingAsync(bool sendFinalData = true)
         {
-            Debug.WriteLine("[TRACKING] Stopping tracking...");
-
             _screenshotCaptureService?.StopPolling();
-
-            // Stop and dispose live screen service
+            if (_isOnBreak && _currentBreakId.HasValue)
+            {
+                await EndBreakAsync();
+            }
             if (_liveScreenService != null)
             {
                 await _liveScreenService.DisconnectAsync();
                 _liveScreenService.Dispose();
                 _liveScreenService = null;
             }
-
             if (!_isTracking) return;
-
             if (sendFinalData && !_isTrackingPaused)
             {
                 if (!string.IsNullOrEmpty(_currentAppName))
                     SendApplicationUsageAndReset();
-
                 if (_isBrowserActive)
                     await SaveCurrentBrowserAndPendingUrls();
-
                 int leftClicks = Interlocked.Exchange(ref _totalLeftClicks, 0);
                 int rightClicks = Interlocked.Exchange(ref _totalRightClicks, 0);
                 int middleClicks = Interlocked.Exchange(ref _totalMiddleClicks, 0);
@@ -1707,15 +1845,12 @@ namespace monitor_desktop.Services
                 int scrollEvents = Interlocked.Exchange(ref _totalScrollEvents, 0);
                 long distancePixels = Interlocked.Read(ref _totalMouseDistance);
                 Interlocked.Exchange(ref _totalMouseDistance, 0);
-
                 int keystrokes = Interlocked.Exchange(ref _totalKeystrokes, 0);
                 int specialKeyCount = Interlocked.Exchange(ref _totalSpecialKeyCount, 0);
                 int typingBursts = Interlocked.Exchange(ref _typingBursts, 0);
                 int activeTypingSeconds = Interlocked.Exchange(ref _totalActiveTypingSeconds, 0);
-
                 int avgWpm = 0;
                 int peakWpm = 0;
-
                 lock (_wpmLock)
                 {
                     if (_wpmMeasurements.Count > 0)
@@ -1724,11 +1859,9 @@ namespace monitor_desktop.Services
                     }
                     peakWpm = _peakWpm;
                 }
-
                 await SendMouseActivityAsync(leftClicks, rightClicks, middleClicks, doubleClicks, scrollEvents, distancePixels);
                 await SendKeyboardActivityAsync(keystrokes, specialKeyCount, typingBursts, avgWpm, peakWpm, activeTypingSeconds);
             }
-
             if (_isIdle)
             {
                 var idleEndTime = DateTime.Now;
@@ -1739,7 +1872,6 @@ namespace monitor_desktop.Services
                 }
                 _isIdle = false;
             }
-
             lock (_lockObject)
             {
                 _heartbeatTimer?.Dispose();
@@ -1759,12 +1891,9 @@ namespace monitor_desktop.Services
                     UnhookWindowsHookEx(_mouseHookId);
                     _mouseHookId = IntPtr.Zero;
                 }
-
                 _isTracking = false;
                 _isTrackingPaused = false;
             }
-
-            Debug.WriteLine("[TRACKING] Tracking stopped");
         }
         #endregion
 
@@ -1773,13 +1902,11 @@ namespace monitor_desktop.Services
             if (_isDisposed) return;
             _screenshotCaptureService?.Dispose();
             _screenshotCaptureService = null;
-
             if (_liveScreenService != null)
             {
                 _liveScreenService.Dispose();
                 _liveScreenService = null;
             }
-
             SystemEvents.PowerModeChanged -= OnPowerModeChanged;
             SystemEvents.SessionSwitch -= OnSessionSwitch;
             _isDisposed = true;

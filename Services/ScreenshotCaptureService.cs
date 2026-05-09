@@ -15,6 +15,7 @@ namespace monitor_desktop.Services
         private long _currentSessionId;
         private bool _isPolling;
         private bool _isDisposed;
+        private readonly object _lockObject = new object();
 
         public event EventHandler<string> StatusChanged;
 
@@ -26,31 +27,43 @@ namespace monitor_desktop.Services
 
         public void StartPolling(long sessionId)
         {
-            if (_isPolling) StopPolling();
+            lock (_lockObject)
+            {
+                if (_isPolling) StopPolling();
 
-            _currentSessionId = sessionId;
-            _isPolling = true;
+                _currentSessionId = sessionId;
+                _isPolling = true;
 
-            _pollingTimer = new System.Timers.Timer(10000);
-            _pollingTimer.Elapsed += async (sender, e) => await PollForScreenshotRequests();
-            _pollingTimer.AutoReset = true;
-            _pollingTimer.Start();
+                _pollingTimer = new System.Timers.Timer(5000); // Poll every 5 seconds
+                _pollingTimer.Elapsed += async (sender, e) => await PollForScreenshotRequests();
+                _pollingTimer.AutoReset = true;
+                _pollingTimer.Start();
+
+                Debug.WriteLine($"[SCREENSHOT] Started polling for session {sessionId}");
+            }
         }
 
         public void StopPolling()
         {
-            if (_pollingTimer != null)
+            lock (_lockObject)
             {
-                _pollingTimer.Stop();
-                _pollingTimer.Dispose();
-                _pollingTimer = null;
+                if (_pollingTimer != null)
+                {
+                    _pollingTimer.Stop();
+                    _pollingTimer.Dispose();
+                    _pollingTimer = null;
+                }
+                _isPolling = false;
+                Debug.WriteLine("[SCREENSHOT] Stopped polling");
             }
-            _isPolling = false;
         }
 
         private async Task PollForScreenshotRequests()
         {
-            if (!_isPolling || _currentSessionId == 0) return;
+            lock (_lockObject)
+            {
+                if (!_isPolling || _currentSessionId == 0) return;
+            }
 
             try
             {
@@ -58,24 +71,36 @@ namespace monitor_desktop.Services
 
                 if (response.Status == 200 && response.Data != null && response.Data.Count > 0)
                 {
+                    Debug.WriteLine($"[SCREENSHOT] Found {response.Data.Count} pending screenshot requests");
+
                     foreach (var request in response.Data)
                     {
-                        await ProcessScreenshotRequest(request);
+                        // Only process PENDING requests
+                        if (request.Status == "PENDING")
+                        {
+                            await ProcessScreenshotRequest(request);
+                        }
                     }
                 }
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"Error polling screenshot requests: {ex.Message}");
+                Debug.WriteLine($"[SCREENSHOT] Error polling requests: {ex.Message}");
             }
         }
 
         private async Task ProcessScreenshotRequest(ScreenshotResponseDto request)
         {
+            Debug.WriteLine($"[SCREENSHOT] Processing request {request.RequestId} for session {request.SessionId}");
+
             try
             {
+                // Capture full screen
                 byte[] screenshotBytes = CaptureFullScreen();
                 string base64Image = Convert.ToBase64String(screenshotBytes);
+
+                var imageSizeKB = screenshotBytes.Length / 1024;
+                Debug.WriteLine($"[SCREENSHOT] Captured screenshot for request {request.RequestId}, size: {imageSizeKB}KB");
 
                 var uploadDto = new DesktopAgentScreenshotUploadDto
                 {
@@ -86,21 +111,41 @@ namespace monitor_desktop.Services
                     Success = true
                 };
 
-                await _trackingService.UploadScreenshot(uploadDto);
+                var response = await _trackingService.UploadScreenshot(uploadDto);
+
+                if (response.Status == 200 || response.Status == 201)
+                {
+                    Debug.WriteLine($"[SCREENSHOT] Successfully uploaded screenshot for request {request.RequestId}");
+                    StatusChanged?.Invoke(this, $"Screenshot {request.RequestId} uploaded successfully");
+                }
+                else
+                {
+                    Debug.WriteLine($"[SCREENSHOT] Failed to upload screenshot: {response.Message}");
+                    StatusChanged?.Invoke(this, $"Failed to upload screenshot for request {request.RequestId}: {response.Message}");
+                }
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"Error processing screenshot request {request.RequestId}: {ex.Message}");
+                Debug.WriteLine($"[SCREENSHOT] Error processing request {request.RequestId}: {ex.Message}");
+                StatusChanged?.Invoke(this, $"Error processing screenshot request: {ex.Message}");
 
-                var uploadDto = new DesktopAgentScreenshotUploadDto
+                // Send failure response
+                try
                 {
-                    RequestId = request.RequestId,
-                    SessionId = _currentSessionId,
-                    Success = false,
-                    ErrorMessage = ex.Message
-                };
+                    var uploadDto = new DesktopAgentScreenshotUploadDto
+                    {
+                        RequestId = request.RequestId,
+                        SessionId = _currentSessionId,
+                        Success = false,
+                        ErrorMessage = ex.Message
+                    };
 
-                await _trackingService.UploadScreenshot(uploadDto);
+                    await _trackingService.UploadScreenshot(uploadDto);
+                }
+                catch (Exception uploadEx)
+                {
+                    Debug.WriteLine($"[SCREENSHOT] Failed to send error response: {uploadEx.Message}");
+                }
             }
         }
 
@@ -126,7 +171,7 @@ namespace monitor_desktop.Services
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"Failed to capture screen: {ex.Message}");
+                Debug.WriteLine($"[SCREENSHOT] Failed to capture screen: {ex.Message}");
                 throw;
             }
         }
@@ -136,11 +181,6 @@ namespace monitor_desktop.Services
             var screenWidth = (int)SystemParameters.PrimaryScreenWidth;
             var screenHeight = (int)SystemParameters.PrimaryScreenHeight;
             return new Rectangle(0, 0, screenWidth, screenHeight);
-        }
-
-        private void AddDebugLog(string message)
-        {
-            StatusChanged?.Invoke(this, $"[{DateTime.Now:HH:mm:ss}] {message}");
         }
 
         public void Dispose()

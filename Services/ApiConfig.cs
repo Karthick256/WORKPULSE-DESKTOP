@@ -22,11 +22,17 @@
         public const string TrackingMouse = ApiBaseUrl + "/tracking/mouse";
         public const string TrackingKeyboard = ApiBaseUrl + "/tracking/keyboard";
         public const string TrackingIdleStart = ApiBaseUrl + "/tracking/idle/start";
-        public const string TrackingScreenshotRequest = ApiBaseUrl + "/tracking/admin/screenshot/request";
-        public const string TrackingScreenshotPending = ApiBaseUrl + "/tracking/agent/screenshot/pending";
-        public const string TrackingScreenshotUpload = ApiBaseUrl + "/tracking/agent/screenshot/upload";
-        public const string LiveScreenPending = ApiBaseUrl + "/live-screen/agent/pending";
-        public const string LiveScreenConfirm = ApiBaseUrl + "/live-screen/agent/confirm";
-        public const string LiveScreenStop = ApiBaseUrl + "/live-screen/agent/stop";
+        public const string TrackingIdleEnd = ApiBaseUrl + "/tracking/idle/end";
+        public const string TrackingBreakStart = ApiBaseUrl + "/tracking/break/start";
+        public const string TrackingBreakClose = ApiBaseUrl + "/tracking/break/close";
+        public const string TrackingBreakActiveMe = ApiBaseUrl + "/tracking/break/active";
+        public const string TrackingBreakHistory = ApiBaseUrl + "/tracking/break/history";
+
+        public const string TrackingScreenshotPending = ApiBaseUrl + "/screen-capture/agent/screenshot/pending";
+        public const string TrackingScreenshotUpload = ApiBaseUrl + "/screen-capture/agent/screenshot/upload";
+
+        public const string LiveScreenPending = ApiBaseUrl + "/live-stream/agent/pending";
+        public const string LiveScreenConfirm = ApiBaseUrl + "/live-stream/agent/confirm";
+        public const string LiveScreenStop = ApiBaseUrl + "/live-stream/agent/stop";
     }
 }
