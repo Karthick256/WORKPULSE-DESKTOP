@@ -33,6 +33,9 @@ namespace monitor_desktop.ViewModels
         private System.Timers.Timer _breakTimer;
         private string _breakDuration;
 
+        private readonly SemaphoreSlim _breakLock = new SemaphoreSlim(1, 1);
+        private CancellationTokenSource _breakCts;
+
         public ICommand CheckInCommand { get; private set; }
         public ICommand CheckOutCommand { get; private set; }
         public ICommand RefreshCommand { get; private set; }
@@ -160,12 +163,104 @@ namespace monitor_desktop.ViewModels
             CheckInCommand = new RelayCommand(async _ => await CheckIn(), _ => CanCheckIn);
             CheckOutCommand = new RelayCommand(async _ => await CheckOut(), _ => CanCheckOut);
             RefreshCommand = new RelayCommand(async _ => await LoadActiveSession());
-            StartBreakCommand = new RelayCommand(async _ => await StartBreak(), _ => CanStartBreak);
+            StartBreakCommand = new RelayCommand(_ => _ = StartBreakSafe(), _ => CanStartBreak);
             EndBreakCommand = new RelayCommand(async _ => await EndBreak(), _ => CanEndBreak);
             Application.Current?.Dispatcher.BeginInvoke(new Action(async () =>
             {
                 await LoadActiveSession();
             }), DispatcherPriority.Background);
+        }
+
+        private async Task StartBreakSafe()
+        {
+            if (!CanStartBreak) return;
+
+            await _breakLock.WaitAsync();
+            try
+            {
+                _breakCts?.Cancel();
+                _breakCts = new CancellationTokenSource();
+
+                await Application.Current.Dispatcher.InvokeAsync(async () =>
+                {
+                    var breakWindow = new BreakSelectionWindow();
+                    breakWindow.Owner = Application.Current.MainWindow;
+
+                    // Use Show() instead of ShowDialog() to prevent blocking
+                    var result = breakWindow.ShowDialog();
+
+                    if (result == true && breakWindow.BreakSelected)
+                    {
+                        await StartBreakInternal(breakWindow.SelectedBreakType, breakWindow.Notes);
+                    }
+                });
+            }
+            catch (OperationCanceledException)
+            {
+                // Expected when cancelled
+            }
+            catch (Exception ex)
+            {
+                await HandleBreakError(ex);
+            }
+            finally
+            {
+                _breakLock.Release();
+            }
+        }
+
+        private async Task StartBreakInternal(BreakType breakType, string notes)
+        {
+            IsLoading = true;
+            StatusMessage = $"Starting {GetBreakTypeName(breakType)} break...";
+
+            try
+            {
+                // Run the break start in a separate task to avoid UI blocking
+                var success = await Task.Run(async () =>
+                    await _trackerService.StartBreakAsync(breakType, notes));
+
+                if (success)
+                {
+                    await Application.Current.Dispatcher.InvokeAsync(() =>
+                    {
+                        IsOnBreak = true;
+                        _currentBreakType = breakType;
+                        StatusMessage = $"On {GetBreakTypeName(breakType)} break - Tracking paused";
+                        BreakStatus = $"On {GetBreakTypeName(breakType)} break";
+                        StartBreakTimer();
+                        OnPropertyChanged(nameof(BreakButtonText));
+                    });
+                }
+                else
+                {
+                    await ShowErrorMessage("Failed to start break. Please try again.");
+                }
+            }
+            catch (Exception ex)
+            {
+                await ShowErrorMessage($"Error starting break: {ex.Message}");
+            }
+            finally
+            {
+                IsLoading = false;
+            }
+        }
+
+        private async Task HandleBreakError(Exception ex)
+        {
+            Debug.WriteLine($"Break error: {ex.Message}");
+            await ShowErrorMessage($"Error starting break: {ex.Message}");
+            IsLoading = false;
+        }
+
+        private async Task ShowErrorMessage(string message)
+        {
+            await Application.Current.Dispatcher.InvokeAsync(() =>
+            {
+                StatusMessage = message;
+                MessageBox.Show(message, "Break Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            });
         }
 
         private void OnTrackerStatusChanged(object sender, string status)
