@@ -181,32 +181,129 @@ namespace monitor_desktop.ViewModels
                 _breakCts?.Cancel();
                 _breakCts = new CancellationTokenSource();
 
-                await Application.Current.Dispatcher.InvokeAsync(async () =>
+                // Log for debugging
+                LogDebug("Starting break process");
+
+                // Create window on UI thread with proper dispatcher
+                BreakSelectionWindow breakWindow = null;
+
+                await Application.Current.Dispatcher.InvokeAsync(() =>
                 {
-                    var breakWindow = new BreakSelectionWindow();
-                    breakWindow.Owner = Application.Current.MainWindow;
-
-                    // Use Show() instead of ShowDialog() to prevent blocking
-                    var result = breakWindow.ShowDialog();
-
-                    if (result == true && breakWindow.BreakSelected)
+                    try
                     {
-                        await StartBreakInternal(breakWindow.SelectedBreakType, breakWindow.Notes);
+                        breakWindow = new BreakSelectionWindow();
+
+                        // Try multiple ways to set owner
+                        if (Application.Current.MainWindow != null && Application.Current.MainWindow.IsVisible)
+                        {
+                            breakWindow.Owner = Application.Current.MainWindow;
+                            LogDebug("Owner set to MainWindow");
+                        }
+                        else
+                        {
+                            // Fallback: find any open window
+                            var openWindow = Application.Current.Windows.OfType<Window>()
+                                .FirstOrDefault(w => w.IsVisible && w != breakWindow);
+                            if (openWindow != null)
+                            {
+                                breakWindow.Owner = openWindow;
+                                LogDebug("Owner set to visible window");
+                            }
+                        }
+
+                        // Ensure window appears on top
+                        breakWindow.Topmost = true;
+
+                        LogDebug("Break window created successfully");
+                    }
+                    catch (Exception ex)
+                    {
+                        LogError("Failed to create break window", ex);
+                        throw;
                     }
                 });
+
+                if (breakWindow == null)
+                {
+                    await ShowErrorMessage("Could not create break selection window");
+                    return;
+                }
+
+                bool? result = false;
+
+                await Application.Current.Dispatcher.InvokeAsync(() =>
+                {
+                    try
+                    {
+                        // Use ShowDialog with timeout to prevent hanging
+                        result = breakWindow.ShowDialog();
+                        LogDebug($"Break window dialog result: {result}");
+                    }
+                    catch (Exception ex)
+                    {
+                        LogError("Error showing break dialog", ex);
+                        result = false;
+                    }
+                });
+
+                if (result == true && breakWindow.BreakSelected)
+                {
+                    LogDebug($"Break selected: {breakWindow.SelectedBreakType}");
+                    await StartBreakInternal(breakWindow.SelectedBreakType, breakWindow.Notes);
+                }
+                else
+                {
+                    LogDebug("Break cancelled or no selection");
+                }
             }
             catch (OperationCanceledException)
             {
-                // Expected when cancelled
+                LogDebug("Break operation cancelled");
             }
             catch (Exception ex)
             {
+                LogError("StartBreakSafe error", ex);
                 await HandleBreakError(ex);
             }
             finally
             {
                 _breakLock.Release();
             }
+        }
+
+        // Add logging helper methods to AttendanceViewModel
+        private void LogDebug(string message)
+        {
+            try
+            {
+                var logPath = System.IO.Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "WorkPulse", "attendance_debug.log");
+                var dir = System.IO.Path.GetDirectoryName(logPath);
+                if (!System.IO.Directory.Exists(dir))
+                    System.IO.Directory.CreateDirectory(dir);
+
+                System.IO.File.AppendAllText(logPath,
+                    $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} [DEBUG] {message}\n");
+            }
+            catch { }
+        }
+
+        private void LogError(string context, Exception ex)
+        {
+            try
+            {
+                var logPath = System.IO.Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "WorkPulse", "attendance_error.log");
+                var dir = System.IO.Path.GetDirectoryName(logPath);
+                if (!System.IO.Directory.Exists(dir))
+                    System.IO.Directory.CreateDirectory(dir);
+
+                System.IO.File.AppendAllText(logPath,
+                    $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} [ERROR] {context}: {ex.Message}\n{ex.StackTrace}\n");
+            }
+            catch { }
         }
 
         private async Task StartBreakInternal(BreakType breakType, string notes)

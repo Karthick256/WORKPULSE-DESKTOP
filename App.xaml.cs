@@ -18,6 +18,7 @@ namespace monitor_desktop
         protected override void OnStartup(StartupEventArgs e)
         {
             base.OnStartup(e);
+
             bool createdNew;
             _appMutex = new Mutex(true, "WorkPulse_Application", out createdNew);
 
@@ -39,16 +40,20 @@ namespace monitor_desktop
             var versionManager = new VersionManager();
             versionManager.CleanupOldUpdates();
 
+            Window mainWindow;
+
             if (_tokenManager.IsAuthenticated)
             {
-                var dashboard = new DashboardWindow();
-                dashboard.Show();
+                mainWindow = new DashboardWindow();
             }
             else
             {
-                var loginWindow = new LoginWindow();
-                loginWindow.Show();
+                mainWindow = new LoginWindow();
             }
+
+            // IMPORTANT: Set the MainWindow property
+            mainWindow.Show();
+            Application.Current.MainWindow = mainWindow;
         }
 
         protected override void OnExit(ExitEventArgs e)
