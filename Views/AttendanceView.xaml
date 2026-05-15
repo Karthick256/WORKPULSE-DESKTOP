@@ -4,45 +4,69 @@
              Background="Transparent">
 
     <UserControl.Resources>
-        <SolidColorBrush x:Key="CardBg" Color="#FFFFFF"/>
-        <SolidColorBrush x:Key="AccentBlue" Color="#2563EB"/>
-        <SolidColorBrush x:Key="AccentTeal" Color="#0EA5E9"/>
-        <SolidColorBrush x:Key="TextDark" Color="#0F172A"/>
-        <SolidColorBrush x:Key="TextSub" Color="#64748B"/>
-        <SolidColorBrush x:Key="TextMuted" Color="#94A3B8"/>
-        <SolidColorBrush x:Key="InputBg" Color="#F8FAFC"/>
-        <SolidColorBrush x:Key="InputBorder" Color="#E2E8F0"/>
+        <!-- Palette -->
+        <SolidColorBrush x:Key="PageBg"       Color="#F5F7FA"/>
+        <SolidColorBrush x:Key="CardBg"       Color="#FFFFFF"/>
+        <SolidColorBrush x:Key="AccentBlue"   Color="#2563EB"/>
+        <SolidColorBrush x:Key="AccentBlueBg" Color="#EFF6FF"/>
         <SolidColorBrush x:Key="SuccessGreen" Color="#10B981"/>
-        <SolidColorBrush x:Key="ErrorRed" Color="#DC2626"/>
+        <SolidColorBrush x:Key="SuccessBg"    Color="#ECFDF5"/>
+        <SolidColorBrush x:Key="WarnAmber"    Color="#F59E0B"/>
+        <SolidColorBrush x:Key="WarnBg"       Color="#FFFBEB"/>
+        <SolidColorBrush x:Key="ErrorRed"     Color="#DC2626"/>
+        <SolidColorBrush x:Key="ErrorBg"      Color="#FEF2F2"/>
+        <SolidColorBrush x:Key="TextDark"     Color="#0F172A"/>
+        <SolidColorBrush x:Key="TextSub"      Color="#64748B"/>
+        <SolidColorBrush x:Key="TextMuted"    Color="#94A3B8"/>
+        <SolidColorBrush x:Key="Divider"      Color="#E2E8F0"/>
 
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
 
-        <Style x:Key="CardStyle" TargetType="Border">
-            <Setter Property="Background" Value="{StaticResource CardBg}"/>
-            <Setter Property="CornerRadius" Value="14"/>
-            <Setter Property="BorderBrush" Value="{StaticResource InputBorder}"/>
+        <!-- Flat card (no shadow — sits inside dashboard's already-shadowed card) -->
+        <Style x:Key="InfoCard" TargetType="Border">
+            <Setter Property="Background"      Value="{StaticResource CardBg}"/>
+            <Setter Property="CornerRadius"    Value="12"/>
+            <Setter Property="BorderBrush"     Value="{StaticResource Divider}"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Effect">
-                <Setter.Value>
-                    <DropShadowEffect Color="#94A3B8" BlurRadius="20" ShadowDepth="0" Opacity="0.10"/>
-                </Setter.Value>
-            </Setter>
         </Style>
 
-        <Style x:Key="SuccessButton" TargetType="Button">
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="FontSize" Value="13"/>
+        <!-- Section header text -->
+        <Style x:Key="SectionTitle" TargetType="TextBlock">
+            <Setter Property="FontSize"     Value="14"/>
+            <Setter Property="FontWeight"   Value="SemiBold"/>
+            <Setter Property="Foreground"   Value="{StaticResource TextDark}"/>
+            <Setter Property="FontFamily"   Value="Segoe UI"/>
+        </Style>
+
+        <!-- Field label -->
+        <Style x:Key="FieldLabel" TargetType="TextBlock">
+            <Setter Property="FontSize"   Value="11"/>
+            <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
+            <Setter Property="FontFamily" Value="Segoe UI"/>
+            <Setter Property="Margin"     Value="0,0,0,2"/>
+        </Style>
+
+        <!-- Field value -->
+        <Style x:Key="FieldValue" TargetType="TextBlock">
+            <Setter Property="FontSize"   Value="13"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="Height" Value="42"/>
-            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Foreground" Value="{StaticResource TextDark}"/>
+            <Setter Property="FontFamily" Value="Segoe UI"/>
+        </Style>
+
+        <!-- Green Check-In button -->
+        <Style x:Key="BtnSuccess" TargetType="Button">
+            <Setter Property="Foreground"      Value="White"/>
+            <Setter Property="FontSize"        Value="13"/>
+            <Setter Property="FontWeight"      Value="SemiBold"/>
+            <Setter Property="FontFamily"      Value="Segoe UI"/>
+            <Setter Property="Height"          Value="40"/>
+            <Setter Property="Cursor"          Value="Hand"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bd" CornerRadius="10" Background="#10B981">
-                            <Border.Effect>
-                                <DropShadowEffect Color="#10B981" BlurRadius="12" ShadowDepth="0" Opacity="0.3"/>
-                            </Border.Effect>
+                        <Border x:Name="Bd" CornerRadius="8" Background="#10B981">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
@@ -51,7 +75,7 @@
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter TargetName="Bd" Property="Background" Value="#CBD5E1"/>
-                                <Setter Property="Foreground" Value="#F1F5F9"/>
+                                <Setter Property="Foreground" Value="#94A3B8"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -59,20 +83,19 @@
             </Setter>
         </Style>
 
-        <Style x:Key="DangerButton" TargetType="Button">
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="FontSize" Value="13"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="Height" Value="42"/>
-            <Setter Property="Cursor" Value="Hand"/>
+        <!-- Red Check-Out button -->
+        <Style x:Key="BtnDanger" TargetType="Button">
+            <Setter Property="Foreground"      Value="White"/>
+            <Setter Property="FontSize"        Value="13"/>
+            <Setter Property="FontWeight"      Value="SemiBold"/>
+            <Setter Property="FontFamily"      Value="Segoe UI"/>
+            <Setter Property="Height"          Value="40"/>
+            <Setter Property="Cursor"          Value="Hand"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bd" CornerRadius="10" Background="#DC2626">
-                            <Border.Effect>
-                                <DropShadowEffect Color="#DC2626" BlurRadius="12" ShadowDepth="0" Opacity="0.25"/>
-                            </Border.Effect>
+                        <Border x:Name="Bd" CornerRadius="8" Background="#DC2626">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
@@ -81,7 +104,65 @@
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter TargetName="Bd" Property="Background" Value="#CBD5E1"/>
-                                <Setter Property="Foreground" Value="#F1F5F9"/>
+                                <Setter Property="Foreground" Value="#94A3B8"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Amber Break button -->
+        <Style x:Key="BtnBreak" TargetType="Button">
+            <Setter Property="Foreground"      Value="White"/>
+            <Setter Property="FontSize"        Value="13"/>
+            <Setter Property="FontWeight"      Value="SemiBold"/>
+            <Setter Property="FontFamily"      Value="Segoe UI"/>
+            <Setter Property="Height"          Value="40"/>
+            <Setter Property="Cursor"          Value="Hand"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" CornerRadius="8" Background="#F59E0B">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#D97706"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Bd" Property="Background" Value="#CBD5E1"/>
+                                <Setter Property="Foreground" Value="#94A3B8"/>
+                            </Trigger>
+                            <DataTrigger Binding="{Binding IsOnBreak}" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#EF4444"/>
+                            </DataTrigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- End-Break (red outline) button -->
+        <Style x:Key="BtnEndBreak" TargetType="Button">
+            <Setter Property="Foreground"      Value="{StaticResource ErrorRed}"/>
+            <Setter Property="FontSize"        Value="13"/>
+            <Setter Property="FontWeight"      Value="SemiBold"/>
+            <Setter Property="FontFamily"      Value="Segoe UI"/>
+            <Setter Property="Height"          Value="40"/>
+            <Setter Property="Cursor"          Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" CornerRadius="8"
+                                Background="#FEF2F2"
+                                BorderBrush="#FECACA" BorderThickness="1">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#FEE2E2"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -90,165 +171,287 @@
         </Style>
     </UserControl.Resources>
 
-    <Grid Margin="20">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-        </Grid.RowDefinitions>
+    <!-- ══════════════════════════════════════════════════════════════
+         ROOT — full-width content block, padding matches dashboard
+    ══════════════════════════════════════════════════════════════ -->
+    <StackPanel Margin="24,24,24,24">
 
-        <Border Grid.Row="1" Style="{StaticResource CardStyle}" Padding="30" HorizontalAlignment="Center" Width="400">
-            <StackPanel>
-                <Border Width="60" Height="60" CornerRadius="16" HorizontalAlignment="Center" Margin="0,0,0,16">
-                    <Border.Background>
-                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                            <GradientStop Color="#2563EB" Offset="0"/>
-                            <GradientStop Color="#0EA5E9" Offset="1"/>
-                        </LinearGradientBrush>
-                    </Border.Background>
-                    <Border.Effect>
-                        <DropShadowEffect Color="#2563EB" BlurRadius="16" ShadowDepth="0" Opacity="0.25"/>
-                    </Border.Effect>
-                    <TextBlock Text="&#xE77B;" FontFamily="Segoe MDL2 Assets" FontSize="24" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                </Border>
+        <!-- ── Page section header ── -->
+        <Grid Margin="0,0,0,20">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0">
+                <TextBlock Text="Attendance" Style="{StaticResource SectionTitle}" FontSize="16"/>
+                <TextBlock Text="Track your daily check-in, check-out and breaks"
+                           FontSize="12" Foreground="{StaticResource TextMuted}"
+                           FontFamily="Segoe UI" Margin="0,2,0,0"/>
+            </StackPanel>
+            <!-- Status pill -->
+            <Border Grid.Column="1" CornerRadius="20" Padding="12,5" VerticalAlignment="Center">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Setter Property="Background" Value="{StaticResource ErrorBg}"/>
+                        <Setter Property="BorderBrush" Value="#FECACA"/>
+                        <Setter Property="BorderThickness" Value="1"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsCheckedIn}" Value="True">
+                                <Setter Property="Background" Value="{StaticResource SuccessBg}"/>
+                                <Setter Property="BorderBrush" Value="#6EE7B7"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+                <TextBlock FontSize="12" FontWeight="SemiBold" FontFamily="Segoe UI">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Text"       Value="● Inactive"/>
+                            <Setter Property="Foreground" Value="{StaticResource ErrorRed}"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsCheckedIn}" Value="True">
+                                    <Setter Property="Text"       Value="● Active"/>
+                                    <Setter Property="Foreground" Value="{StaticResource SuccessGreen}"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+            </Border>
+        </Grid>
 
-                <TextBlock Text="Current Session" FontSize="16" FontWeight="Bold" Foreground="{StaticResource TextDark}" HorizontalAlignment="Center" Margin="0,0,0,16"/>
+        <!-- ── Top row: 3 stat cards ── -->
+        <Grid Margin="0,0,0,20">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="16"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="16"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
 
-                <Border CornerRadius="20" Padding="10,5" Margin="0,0,0,20" HorizontalAlignment="Center" Background="{StaticResource InputBg}">
-                    <TextBlock FontSize="11" FontWeight="Bold" HorizontalAlignment="Center">
+            <!-- Card 1: Check-In Time -->
+            <Border Grid.Column="0" Style="{StaticResource InfoCard}" Padding="20,16">
+                <StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                        <Border Width="32" Height="32" CornerRadius="8"
+                                Background="{StaticResource AccentBlueBg}" Margin="0,0,10,0">
+                            <TextBlock Text="&#xE823;" FontFamily="Segoe MDL2 Assets"
+                                       FontSize="14" Foreground="{StaticResource AccentBlue}"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <TextBlock Text="Check-In" Style="{StaticResource SectionTitle}"
+                                   VerticalAlignment="Center"/>
+                    </StackPanel>
+                    <TextBlock Text="{Binding CurrentSession.CheckInTime, StringFormat=HH:mm:ss, TargetNullValue='—'}"
+                               FontSize="22" FontWeight="Bold"
+                               Foreground="{StaticResource AccentBlue}"
+                               FontFamily="Segoe UI"/>
+                    <TextBlock Text="{Binding CurrentSession.CheckInTime, StringFormat='ddd, MMM dd yyyy', TargetNullValue='No active session'}"
+           Style="{StaticResource FieldLabel}" Margin="0,4,0,0"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Card 2: Session Duration -->
+            <Border Grid.Column="2" Style="{StaticResource InfoCard}" Padding="20,16">
+                <StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                        <Border Width="32" Height="32" CornerRadius="8"
+                                Background="{StaticResource SuccessBg}" Margin="0,0,10,0">
+                            <TextBlock Text="&#xE916;" FontFamily="Segoe MDL2 Assets"
+                                       FontSize="14" Foreground="{StaticResource SuccessGreen}"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <TextBlock Text="Duration" Style="{StaticResource SectionTitle}"
+                                   VerticalAlignment="Center"/>
+                    </StackPanel>
+                    <TextBlock FontSize="22" FontWeight="Bold" FontFamily="Segoe UI">
                         <TextBlock.Style>
                             <Style TargetType="TextBlock">
-                                <Setter Property="Text" Value="● INACTIVE"/>
-                                <Setter Property="Foreground" Value="#DC2626"/>
+                                <Setter Property="Text"       Value="00:00:00"/>
+                                <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
                                 <Style.Triggers>
                                     <DataTrigger Binding="{Binding IsCheckedIn}" Value="True">
-                                        <Setter Property="Text" Value="● ACTIVE"/>
-                                        <Setter Property="Foreground" Value="#10B981"/>
+                                        <Setter Property="Foreground" Value="{StaticResource SuccessGreen}"/>
                                     </DataTrigger>
                                 </Style.Triggers>
                             </Style>
                         </TextBlock.Style>
+                        <Run Text="{Binding SessionDuration, TargetNullValue='00:00:00'}"/>
                     </TextBlock>
-                </Border>
-
-                <StackPanel Margin="0,0,0,20">
-                    <Grid Margin="0,0,0,10">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="90"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="Check In:" FontSize="12" Foreground="{StaticResource TextMuted}"/>
-                        <TextBlock Grid.Column="1" Text="{Binding CurrentSession.CheckInTime, StringFormat=HH:mm:ss, TargetNullValue='—'}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource TextDark}"/>
-                    </Grid>
-
-                    <Grid Margin="0,0,0,10" Visibility="{Binding IsCheckedIn, Converter={StaticResource BoolToVis}}">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="90"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="Duration:" FontSize="12" Foreground="{StaticResource TextMuted}"/>
-                        <TextBlock Grid.Column="1" Text="{Binding SessionDuration}" FontSize="13" FontWeight="Bold" Foreground="{StaticResource AccentBlue}"/>
-                    </Grid>
-
-                    <Grid Margin="0,0,0,10" Visibility="{Binding CurrentSession.WorkstationName, Converter={StaticResource BoolToVis}}">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="90"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="Workstation:" FontSize="12" Foreground="{StaticResource TextMuted}"/>
-                        <TextBlock Grid.Column="1" Text="{Binding CurrentSession.WorkstationName}" FontSize="12" Foreground="{StaticResource TextDark}" TextWrapping="Wrap"/>
-                    </Grid>
-
-                    <Grid Visibility="{Binding CurrentSession.IpAddress, Converter={StaticResource BoolToVis}}">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="90"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="IP Address:" FontSize="12" Foreground="{StaticResource TextMuted}"/>
-                        <TextBlock Grid.Column="1" Text="{Binding CurrentSession.IpAddress}" FontSize="12" Foreground="{StaticResource TextDark}"/>
-                    </Grid>
+                    <TextBlock Text="Time elapsed since check-in"
+                               Style="{StaticResource FieldLabel}" Margin="0,4,0,0"/>
                 </StackPanel>
+            </Border>
 
-                <Button Content="{Binding CheckInButtonText}" Command="{Binding CheckInCommand}" Style="{StaticResource SuccessButton}" IsEnabled="{Binding CanCheckIn}" Margin="0,0,0,10"/>
-                <Button Content="{Binding CheckOutButtonText}" Command="{Binding CheckOutCommand}" Style="{StaticResource DangerButton}" IsEnabled="{Binding CanCheckOut}" Margin="0,0,0,10"/>
-                <Button Content="{Binding BreakButtonText}" 
-        Command="{Binding StartBreakCommand}" 
-        CommandParameter="{Binding SelectedBreakType}"
-        Background="#F59E0B" 
-        Foreground="White" 
-        FontSize="13" 
-        FontWeight="SemiBold" 
-        Height="42" 
-        Margin="0,0,0,10"
-        Cursor="Hand"
-        BorderThickness="0"
-        Visibility="{Binding IsCheckedIn, Converter={StaticResource BoolToVis}}">
-                    <Button.Style>
-                        <Style TargetType="Button">
-                            <Setter Property="Background" Value="#F59E0B"/>
-                            <Setter Property="Template">
-                                <Setter.Value>
-                                    <ControlTemplate TargetType="Button">
-                                        <Border x:Name="Bd" CornerRadius="10" Background="{TemplateBinding Background}">
-                                            <Border.Effect>
-                                                <DropShadowEffect Color="#F59E0B" BlurRadius="12" ShadowDepth="0" Opacity="0.3"/>
-                                            </Border.Effect>
-                                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                        </Border>
-                                        <ControlTemplate.Triggers>
-                                            <Trigger Property="IsMouseOver" Value="True">
-                                                <Setter TargetName="Bd" Property="Background" Value="#D97706"/>
-                                            </Trigger>
-                                            <Trigger Property="IsEnabled" Value="False">
-                                                <Setter TargetName="Bd" Property="Background" Value="#CBD5E1"/>
-                                                <Setter Property="Foreground" Value="#F1F5F9"/>
-                                            </Trigger>
-                                        </ControlTemplate.Triggers>
-                                    </ControlTemplate>
-                                </Setter.Value>
-                            </Setter>
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding IsOnBreak}" Value="True">
-                                    <Setter Property="Background" Value="#EF4444"/>
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </Button.Style>
-                </Button>
-                <TextBlock Text="{Binding BreakDuration}" 
-           FontSize="11" 
-           Foreground="#F59E0B"
-           HorizontalAlignment="Center"
-           Margin="0,5,0,0"
-           Visibility="{Binding IsOnBreak, Converter={StaticResource BoolToVis}}"/>
-                <Button Content="End Break" 
-        Command="{Binding EndBreakCommand}" 
-        Background="#EF4444" 
-        Foreground="White" 
-        FontSize="13" 
-        FontWeight="SemiBold" 
-        Height="42" 
-        Margin="0,0,0,10"
-        Cursor="Hand"
-        BorderThickness="0"
-        Visibility="{Binding IsOnBreak, Converter={StaticResource BoolToVis}}">
-                    <Button.Template>
-                        <ControlTemplate TargetType="Button">
-                            <Border x:Name="Bd" CornerRadius="10" Background="#EF4444">
-                                <Border.Effect>
-                                    <DropShadowEffect Color="#EF4444" BlurRadius="12" ShadowDepth="0" Opacity="0.3"/>
-                                </Border.Effect>
-                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                            </Border>
-                            <ControlTemplate.Triggers>
-                                <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter TargetName="Bd" Property="Background" Value="#DC2626"/>
-                                </Trigger>
-                            </ControlTemplate.Triggers>
-                        </ControlTemplate>
-                    </Button.Template>
-                </Button>
-                <ProgressBar IsIndeterminate="True" Visibility="{Binding IsLoading, Converter={StaticResource BoolToVis}}" Foreground="{StaticResource AccentBlue}" Background="Transparent" Height="2" Margin="0,16,0,0"/>
-            </StackPanel>
-        </Border>
-    </Grid>
+            <!-- Card 3: Workstation / Break -->
+            <Border Grid.Column="4" Style="{StaticResource InfoCard}" Padding="20,16">
+                <StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                        <Border Width="32" Height="32" CornerRadius="8"
+                                Background="{StaticResource WarnBg}" Margin="0,0,10,0">
+                            <TextBlock Text="&#xE7C4;" FontFamily="Segoe MDL2 Assets"
+                                       FontSize="14" Foreground="{StaticResource WarnAmber}"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <TextBlock Text="Workstation" Style="{StaticResource SectionTitle}"
+                                   VerticalAlignment="Center"/>
+                    </StackPanel>
+                    <TextBlock Text="{Binding CurrentSession.WorkstationName, TargetNullValue='—'}"
+                               FontSize="15" FontWeight="Bold"
+                               Foreground="{StaticResource TextDark}"
+                               FontFamily="Segoe UI" TextWrapping="Wrap"/>
+                    <TextBlock Text="{Binding CurrentSession.IpAddress, TargetNullValue='IP not available'}"
+                               Style="{StaticResource FieldLabel}" Margin="0,4,0,0"/>
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <!-- ── Bottom row: Session details card  +  Actions card ── -->
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="16"/>
+                <ColumnDefinition Width="300"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Session Details card -->
+            <Border Grid.Column="0" Style="{StaticResource InfoCard}" Padding="24,20">
+                <StackPanel>
+                    <TextBlock Text="Session Details" Style="{StaticResource SectionTitle}"
+                               Margin="0,0,0,16"/>
+
+                    <!-- Row: Check-In -->
+                    <Grid Margin="0,0,0,14">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="130"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="Check-In Time" Style="{StaticResource FieldLabel}"/>
+                        <TextBlock Grid.Column="1"
+                                   Text="{Binding CurrentSession.CheckInTime, StringFormat=HH:mm:ss, TargetNullValue='—'}"
+                                   Style="{StaticResource FieldValue}"/>
+                    </Grid>
+
+                    <Rectangle Height="1" Fill="{StaticResource Divider}" Margin="0,0,0,14"/>
+
+                    <!-- Row: Duration -->
+                    <Grid Margin="0,0,0,14"
+                          Visibility="{Binding IsCheckedIn, Converter={StaticResource BoolToVis}}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="130"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="Session Duration" Style="{StaticResource FieldLabel}"/>
+                        <TextBlock Grid.Column="1" Text="{Binding SessionDuration}"
+                                   FontSize="13" FontWeight="Bold"
+                                   Foreground="{StaticResource AccentBlue}"
+                                   FontFamily="Segoe UI"/>
+                    </Grid>
+
+                    <Rectangle Height="1" Fill="{StaticResource Divider}" Margin="0,0,0,14"
+                               Visibility="{Binding IsCheckedIn, Converter={StaticResource BoolToVis}}"/>
+
+                    <!-- Row: Workstation -->
+                    <Grid Margin="0,0,0,14">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="130"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="Workstation" Style="{StaticResource FieldLabel}"/>
+                        <TextBlock Grid.Column="1"
+                                   Text="{Binding CurrentSession.WorkstationName, TargetNullValue='—'}"
+                                   Style="{StaticResource FieldValue}" TextWrapping="Wrap"/>
+                    </Grid>
+
+                    <Rectangle Height="1" Fill="{StaticResource Divider}" Margin="0,0,0,14"/>
+
+                    <!-- Row: IP -->
+                    <Grid Margin="0,0,0,14">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="130"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="IP Address" Style="{StaticResource FieldLabel}"/>
+                        <TextBlock Grid.Column="1"
+                                   Text="{Binding CurrentSession.IpAddress, TargetNullValue='—'}"
+                                   Style="{StaticResource FieldValue}"/>
+                    </Grid>
+
+                    <!-- Break status row (only visible on break) -->
+                    <Border Background="{StaticResource WarnBg}"
+                            BorderBrush="#FDE68A" BorderThickness="1"
+                            CornerRadius="8" Padding="12,8"
+                            Visibility="{Binding IsOnBreak, Converter={StaticResource BoolToVis}}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="☕" FontSize="13" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <StackPanel>
+                                <TextBlock Text="{Binding BreakStatus}"
+                                           FontSize="12" FontWeight="SemiBold"
+                                           Foreground="#92400E" FontFamily="Segoe UI"/>
+                                <TextBlock Text="{Binding BreakDuration}"
+                                           FontSize="11" Foreground="{StaticResource WarnAmber}"
+                                           FontFamily="Segoe UI" Margin="0,2,0,0"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Loading bar -->
+                    <ProgressBar IsIndeterminate="True"
+                                 Visibility="{Binding IsLoading, Converter={StaticResource BoolToVis}}"
+                                 Height="2" Margin="0,16,0,0"
+                                 Background="Transparent"
+                                 Foreground="{StaticResource AccentBlue}"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Actions card -->
+            <Border Grid.Column="2" Style="{StaticResource InfoCard}" Padding="24,20">
+                <StackPanel>
+                    <TextBlock Text="Actions" Style="{StaticResource SectionTitle}"
+                               Margin="0,0,0,6"/>
+                    <TextBlock Text="{Binding StatusMessage}"
+                               FontSize="11" Foreground="{StaticResource TextMuted}"
+                               FontFamily="Segoe UI" TextWrapping="Wrap"
+                               Margin="0,0,0,20"/>
+
+                    <!-- Check In -->
+                    <Button Content="{Binding CheckInButtonText}"
+                            Command="{Binding CheckInCommand}"
+                            Style="{StaticResource BtnSuccess}"
+                            IsEnabled="{Binding CanCheckIn}"
+                            Margin="0,0,0,10"/>
+
+                    <!-- Check Out -->
+                    <Button Content="{Binding CheckOutButtonText}"
+                            Command="{Binding CheckOutCommand}"
+                            Style="{StaticResource BtnDanger}"
+                            IsEnabled="{Binding CanCheckOut}"
+                            Margin="0,0,0,10"/>
+
+                    <!-- Divider -->
+                    <Rectangle Height="1" Fill="{StaticResource Divider}"
+                               Margin="0,4,0,14"
+                               Visibility="{Binding IsCheckedIn, Converter={StaticResource BoolToVis}}"/>
+
+                    <!-- Start Break -->
+                    <Button Content="{Binding BreakButtonText}"
+                            Command="{Binding StartBreakCommand}"
+                            CommandParameter="{Binding SelectedBreakType}"
+                            Style="{StaticResource BtnBreak}"
+                            IsEnabled="{Binding CanStartBreak}"
+                            Margin="0,0,0,10"
+                            Visibility="{Binding IsCheckedIn, Converter={StaticResource BoolToVis}}"/>
+
+                    <!-- End Break -->
+                    <Button Content="End Break"
+                            Command="{Binding EndBreakCommand}"
+                            Style="{StaticResource BtnEndBreak}"
+                            IsEnabled="{Binding CanEndBreak}"
+                            Visibility="{Binding IsOnBreak, Converter={StaticResource BoolToVis}}"/>
+                </StackPanel>
+            </Border>
+        </Grid>
+
+    </StackPanel>
 </UserControl>

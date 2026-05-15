@@ -11,75 +11,79 @@
         Background="Transparent">
 
     <Window.Resources>
-        <SolidColorBrush x:Key="PageBg" Color="#F5F7FA"/>
-        <SolidColorBrush x:Key="CardBg" Color="#FFFFFF"/>
-        <SolidColorBrush x:Key="AccentBlue" Color="#2563EB"/>
+        <SolidColorBrush x:Key="PageBg"       Color="#F5F7FA"/>
+        <SolidColorBrush x:Key="CardBg"       Color="#FFFFFF"/>
+        <SolidColorBrush x:Key="AccentBlue"   Color="#2563EB"/>
         <SolidColorBrush x:Key="AccentBlueHov" Color="#1D4ED8"/>
-        <SolidColorBrush x:Key="AccentTeal" Color="#0EA5E9"/>
-        <SolidColorBrush x:Key="TextDark" Color="#0F172A"/>
-        <SolidColorBrush x:Key="TextSub" Color="#64748B"/>
-        <SolidColorBrush x:Key="TextMuted" Color="#94A3B8"/>
-        <SolidColorBrush x:Key="InputBg" Color="#F8FAFC"/>
-        <SolidColorBrush x:Key="InputBorder" Color="#E2E8F0"/>
-        <SolidColorBrush x:Key="ErrorRed" Color="#DC2626"/>
-        <SolidColorBrush x:Key="ErrorBg" Color="#FEF2F2"/>
-        <SolidColorBrush x:Key="ErrorBorder" Color="#FECACA"/>
-        <SolidColorBrush x:Key="PanelBg" Color="#EFF6FF"/>
-        <SolidColorBrush x:Key="DividerColor" Color="#E2E8F0"/>
+        <SolidColorBrush x:Key="TextDark"     Color="#0F172A"/>
+        <SolidColorBrush x:Key="TextSub"      Color="#64748B"/>
+        <SolidColorBrush x:Key="TextMuted"    Color="#94A3B8"/>
+        <SolidColorBrush x:Key="InputBg"      Color="#F8FAFC"/>
+        <SolidColorBrush x:Key="InputBorder"  Color="#CBD5E1"/>
+        <SolidColorBrush x:Key="ErrorRed"     Color="#DC2626"/>
+        <SolidColorBrush x:Key="ErrorBg"      Color="#FEF2F2"/>
+        <SolidColorBrush x:Key="ErrorBorder"  Color="#FECACA"/>
 
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
 
-        <Style x:Key="ModernTextBox" TargetType="TextBox">
-            <Setter Property="Height" Value="46"/>
-            <Setter Property="FontSize" Value="14"/>
-            <Setter Property="Foreground" Value="{StaticResource TextDark}"/>
-            <Setter Property="CaretBrush" Value="{StaticResource AccentBlue}"/>
-            <Setter Property="Background" Value="{StaticResource InputBg}"/>
-            <Setter Property="BorderBrush" Value="{StaticResource InputBorder}"/>
-            <Setter Property="BorderThickness" Value="1.5"/>
-            <Setter Property="Padding" Value="14,11"/>
-            <Setter Property="FontFamily" Value="Segoe UI"/>
-        </Style>
-
-        <Style x:Key="ModernPasswordBox" TargetType="PasswordBox">
-            <Setter Property="Height" Value="46"/>
-            <Setter Property="FontSize" Value="14"/>
-            <Setter Property="Foreground" Value="{StaticResource TextDark}"/>
-            <Setter Property="Background" Value="{StaticResource InputBg}"/>
-            <Setter Property="BorderBrush" Value="{StaticResource InputBorder}"/>
-            <Setter Property="BorderThickness" Value="1.5"/>
-            <Setter Property="Padding" Value="14,11"/>
-            <Setter Property="FontFamily" Value="Segoe UI"/>
-        </Style>
-
-        <Style x:Key="PrimaryButton" TargetType="Button">
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="FontSize" Value="14"/>
+        <!-- Input label style -->
+        <Style x:Key="FieldLabel" TargetType="TextBlock">
+            <Setter Property="FontSize"   Value="11"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="Height" Value="46"/>
-            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Foreground" Value="{StaticResource TextSub}"/>
+            <Setter Property="Margin"     Value="0,0,0,5"/>
+            <Setter Property="FontFamily" Value="Segoe UI"/>
+        </Style>
+
+        <!-- TextBox -->
+        <Style x:Key="ModernTextBox" TargetType="TextBox">
+            <Setter Property="Height"          Value="44"/>
+            <Setter Property="FontSize"        Value="13"/>
+            <Setter Property="Foreground"      Value="{StaticResource TextDark}"/>
+            <Setter Property="CaretBrush"      Value="{StaticResource AccentBlue}"/>
+            <Setter Property="Background"      Value="{StaticResource InputBg}"/>
+            <Setter Property="BorderBrush"     Value="{StaticResource InputBorder}"/>
+            <Setter Property="BorderThickness" Value="1.5"/>
+            <Setter Property="Padding"         Value="12,10"/>
+            <Setter Property="FontFamily"      Value="Segoe UI"/>
+        </Style>
+
+        <!-- PasswordBox -->
+        <Style x:Key="ModernPasswordBox" TargetType="PasswordBox">
+            <Setter Property="Height"          Value="44"/>
+            <Setter Property="FontSize"        Value="13"/>
+            <Setter Property="Foreground"      Value="{StaticResource TextDark}"/>
+            <Setter Property="Background"      Value="{StaticResource InputBg}"/>
+            <Setter Property="BorderBrush"     Value="{StaticResource InputBorder}"/>
+            <Setter Property="BorderThickness" Value="1.5"/>
+            <Setter Property="Padding"         Value="12,10"/>
+            <Setter Property="FontFamily"      Value="Segoe UI"/>
+        </Style>
+
+        <!-- Primary (Login) Button -->
+        <Style x:Key="PrimaryButton" TargetType="Button">
+            <Setter Property="Foreground"      Value="White"/>
+            <Setter Property="FontSize"        Value="14"/>
+            <Setter Property="FontWeight"      Value="SemiBold"/>
+            <Setter Property="Height"          Value="44"/>
+            <Setter Property="Cursor"          Value="Hand"/>
             <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="FontFamily"      Value="Segoe UI"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bd" CornerRadius="10">
-                            <Border.Background>
-                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                                    <GradientStop Color="#2563EB" Offset="0"/>
-                                    <GradientStop Color="#0EA5E9" Offset="1"/>
-                                </LinearGradientBrush>
-                            </Border.Background>
+                        <Border x:Name="Bd" CornerRadius="8" Background="{StaticResource AccentBlue}">
                             <Border.Effect>
-                                <DropShadowEffect Color="#2563EB" BlurRadius="14" ShadowDepth="0" Opacity="0.35"/>
+                                <DropShadowEffect Color="#2563EB" BlurRadius="12" ShadowDepth="0" Opacity="0.30"/>
                             </Border.Effect>
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Opacity" Value="0.90"/>
+                                <Setter TargetName="Bd" Property="Background" Value="{StaticResource AccentBlueHov}"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="Bd" Property="Opacity" Value="0.78"/>
+                                <Setter TargetName="Bd" Property="Opacity" Value="0.82"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -87,13 +91,39 @@
             </Setter>
         </Style>
 
+        <!-- Outline (Sign Up) Button -->
+        <Style x:Key="OutlineButton" TargetType="Button">
+            <Setter Property="Foreground"      Value="{StaticResource AccentBlue}"/>
+            <Setter Property="FontSize"        Value="14"/>
+            <Setter Property="FontWeight"      Value="SemiBold"/>
+            <Setter Property="Height"          Value="44"/>
+            <Setter Property="Cursor"          Value="Hand"/>
+            <Setter Property="FontFamily"      Value="Segoe UI"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" CornerRadius="8" Background="White"
+                                BorderBrush="{StaticResource AccentBlue}" BorderThickness="1.5">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#EFF6FF"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Title bar close button -->
         <Style x:Key="TitleBarButton" TargetType="Button">
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
-            <Setter Property="FontSize" Value="12"/>
-            <Setter Property="Width" Value="30"/>
-            <Setter Property="Height" Value="30"/>
-            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Background"      Value="Transparent"/>
+            <Setter Property="Foreground"      Value="{StaticResource TextMuted}"/>
+            <Setter Property="FontSize"        Value="12"/>
+            <Setter Property="Width"           Value="30"/>
+            <Setter Property="Height"          Value="30"/>
+            <Setter Property="Cursor"          Value="Hand"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="Template">
                 <Setter.Value>
@@ -113,108 +143,168 @@
         </Style>
     </Window.Resources>
 
-    <Border CornerRadius="18">
-        <Border.Background>
-            <SolidColorBrush Color="#F5F7FA"/>
-        </Border.Background>
+    <!-- Outer card -->
+    <Border CornerRadius="16" ClipToBounds="True">
         <Border.Effect>
-            <DropShadowEffect Color="#94A3B8" BlurRadius="40" ShadowDepth="0" Opacity="0.25"/>
+            <DropShadowEffect Color="#94A3B8" BlurRadius="40" ShadowDepth="0" Opacity="0.22"/>
         </Border.Effect>
 
         <Grid>
-            <Grid.RowDefinitions>
-                <RowDefinition Height="38"/>
-                <RowDefinition Height="*"/>
-            </Grid.RowDefinitions>
+            <Grid.ColumnDefinitions>
+                <!-- LEFT – form panel (white) -->
+                <ColumnDefinition Width="390"/>
+                <!-- RIGHT – illustration panel -->
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
 
-            <Grid Grid.Row="0" MouseLeftButtonDown="TitleBar_MouseDown" Background="Transparent">
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="18,0,0,0">
-                    <Ellipse Width="11" Height="11" Fill="#FC5F57" Margin="0,0,6,0"/>
-                    <Ellipse Width="11" Height="11" Fill="#FDBC40" Margin="0,0,6,0"/>
-                    <Ellipse Width="11" Height="11" Fill="#33C748"/>
-                </StackPanel>
+            <!-- ═══════════════════════════════════════════════
+                 LEFT PANEL — White form
+            ═══════════════════════════════════════════════ -->
+            <Border Grid.Column="0" Background="White">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="38"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
 
-                <TextBlock Text="WorkPulse"
-                           FontSize="12" FontFamily="Segoe UI" FontWeight="SemiBold"
-                           Foreground="{StaticResource TextMuted}"
-                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
-
-                <Button x:Name="CloseButton" Content="✕" Style="{StaticResource TitleBarButton}"
-                        HorizontalAlignment="Right" VerticalAlignment="Center"
-                        Margin="0,0,18,0" Click="CloseButton_Click"/>
-            </Grid>
-
-            <Grid Grid.Row="1" Margin="24,0,24,24">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="20"/>
-                    <ColumnDefinition Width="*"/>
-                </Grid.ColumnDefinitions>
-
-                <Border Grid.Column="0" CornerRadius="14" ClipToBounds="True">
-                    <Border.Background>
-                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                            <GradientStop Color="#2563EB" Offset="0"/>
-                            <GradientStop Color="#0EA5E9" Offset="1"/>
-                        </LinearGradientBrush>
-                    </Border.Background>
-                    <Grid>
-                        <Ellipse Width="220" Height="220" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-70,-70,0" Opacity="0.18" Fill="White"/>
-                        <Ellipse Width="160" Height="160" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="-50,0,0,-50" Opacity="0.12" Fill="White"/>
-
-                        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Margin="32">
-                            <Border Width="72" Height="72" CornerRadius="20" HorizontalAlignment="Center" Margin="0,0,0,24" Background="#26FFFFFF">
-                                <TextBlock Text="&#xE77B;" FontFamily="Segoe MDL2 Assets" FontSize="30" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                            </Border>
-                            <TextBlock Text="WorkPulse" FontSize="26" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center" Margin="0,0,0,10"/>
-                            <TextBlock Text="Smart employee activity tracking and productivity" FontSize="13" Foreground="#CCFFFFFF" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" Margin="0,0,0,32"/>
+                    <!-- Drag / title bar (left side) -->
+                    <Grid Grid.Row="0" MouseLeftButtonDown="TitleBar_MouseDown" Background="White">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="18,0,0,0">
+                            <Ellipse Width="11" Height="11" Fill="#FC5F57" Margin="0,0,6,0"/>
+                            <Ellipse Width="11" Height="11" Fill="#FDBC40" Margin="0,0,6,0"/>
+                            <Ellipse Width="11" Height="11" Fill="#33C748"/>
                         </StackPanel>
-
-                        <TextBlock Text="© 2026 WorkPulse" FontSize="11" Foreground="#80FFFFFF" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,16"/>
                     </Grid>
-                </Border>
 
-                <Border Grid.Column="2" CornerRadius="14" Background="{StaticResource CardBg}">
-                    <Border.Effect>
-                        <DropShadowEffect Color="#94A3B8" BlurRadius="20" ShadowDepth="0" Opacity="0.10"/>
-                    </Border.Effect>
+                    <!-- Form content -->
+                    <StackPanel Grid.Row="1" VerticalAlignment="Center" Margin="44,0,44,32">
 
-                    <StackPanel VerticalAlignment="Center" Margin="36,32,36,32">
-                        <TextBlock Text="Welcome" FontSize="22" FontWeight="Bold" Foreground="{StaticResource TextDark}" Margin="0,0,0,4"/>
-                        <TextBlock Text="Sign in to your account" FontSize="13" Foreground="{StaticResource TextSub}" Margin="0,0,0,28"/>
+                        <!-- Brand name -->
+                        <TextBlock Text="WorkPulse"
+                                   FontSize="15" FontWeight="Bold"
+                                   Foreground="{StaticResource AccentBlue}"
+                                   FontFamily="Segoe UI"
+                                   Margin="0,0,0,28"/>
 
-                        <Grid Margin="0,0,0,24">
-                            <Rectangle Height="1" Fill="{StaticResource DividerColor}" VerticalAlignment="Center"/>
-                            <Border HorizontalAlignment="Center" Background="White" Padding="10,0">
-                                <TextBlock Text="Enter your credentials" FontSize="11" Foreground="{StaticResource TextMuted}"/>
-                            </Border>
-                        </Grid>
+                        <!-- Headline -->
+                        <TextBlock FontSize="22" FontWeight="Bold"
+                                   Foreground="{StaticResource TextDark}"
+                                   FontFamily="Segoe UI"
+                                   TextWrapping="Wrap"
+                                   Margin="0,0,0,6">
+                            Smart Workforce Monitoring
+                        </TextBlock>
+                        <TextBlock Text="Welcome back, please sign in to your account."
+                                   FontSize="12" Foreground="{StaticResource TextSub}"
+                                   FontFamily="Segoe UI" TextWrapping="Wrap"
+                                   Margin="0,0,0,26"/>
 
-                        <TextBlock Text="USERNAME" FontSize="10" FontWeight="Bold" Foreground="{StaticResource TextSub}" Margin="0,0,0,6"/>
-                        <TextBox x:Name="UsernameBox" Style="{StaticResource ModernTextBox}" Text="{Binding Username, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,16"/>
+                        <!-- Username -->
+                        <TextBlock Text="Email Address" Style="{StaticResource FieldLabel}"/>
+                        <TextBox x:Name="UsernameBox"
+                                 Style="{StaticResource ModernTextBox}"
+                                 Text="{Binding Username, UpdateSourceTrigger=PropertyChanged}"
+                                 Margin="0,0,0,14"/>
 
-                        <TextBlock Text="PASSWORD" FontSize="10" FontWeight="Bold" Foreground="{StaticResource TextSub}" Margin="0,0,0,6"/>
-                        <PasswordBox x:Name="PasswordBox" Style="{StaticResource ModernPasswordBox}" Margin="0,0,0,10"/>
+                        <!-- Password -->
+                        <TextBlock Text="Password" Style="{StaticResource FieldLabel}"/>
+                        <PasswordBox x:Name="PasswordBox"
+                                     Style="{StaticResource ModernPasswordBox}"
+                                     Margin="0,0,0,10"/>
 
-                        <Border Background="{StaticResource ErrorBg}" BorderBrush="{StaticResource ErrorBorder}" BorderThickness="1" CornerRadius="8" Padding="12,10" Margin="0,0,0,14" Visibility="{Binding HasError, Converter={StaticResource BoolToVis}}">
+                        <!-- Error banner -->
+                        <Border Background="{StaticResource ErrorBg}"
+                                BorderBrush="{StaticResource ErrorBorder}"
+                                BorderThickness="1" CornerRadius="7"
+                                Padding="10,8" Margin="0,0,0,10"
+                                Visibility="{Binding HasError, Converter={StaticResource BoolToVis}}">
                             <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="⚠" FontSize="12" Foreground="{StaticResource ErrorRed}" VerticalAlignment="Center"/>
-                                <TextBlock Text="{Binding ErrorMessage}" Foreground="{StaticResource ErrorRed}" FontSize="12" TextWrapping="Wrap" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="⚠" FontSize="11"
+                                           Foreground="{StaticResource ErrorRed}"
+                                           VerticalAlignment="Center"/>
+                                <TextBlock Text="{Binding ErrorMessage}"
+                                           Foreground="{StaticResource ErrorRed}"
+                                           FontSize="11" TextWrapping="Wrap"
+                                           Margin="7,0,0,0" VerticalAlignment="Center"/>
                             </StackPanel>
                         </Border>
 
-                        <TextBlock Margin="0,0,0,20" TextAlignment="Right">
-                            <Hyperlink NavigateUri="https://www.atlanticacmail.com/workpulse/auth/forgot-password" RequestNavigate="Hyperlink_RequestNavigate" Foreground="{StaticResource AccentBlue}" FontSize="12">
-                                Forgot Password?
-                            </Hyperlink>
-                        </TextBlock>
+                        <!-- Remember me + Forgot password row -->
+                        <Grid Margin="0,0,0,20">
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Center">
+                                <CheckBox VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                <TextBlock Text="Remember me" FontSize="12"
+                                           Foreground="{StaticResource TextSub}"
+                                           FontFamily="Segoe UI"
+                                           VerticalAlignment="Center"/>
+                            </StackPanel>
+                            <TextBlock HorizontalAlignment="Right" VerticalAlignment="Center">
+                                <Hyperlink NavigateUri="https://www.atlanticacmail.com/workpulse/auth/forgot-password"
+                                           RequestNavigate="Hyperlink_RequestNavigate"
+                                           Foreground="{StaticResource AccentBlue}"
+                                           FontSize="12">
+                                    Forget Password?
+                                </Hyperlink>
+                            </TextBlock>
+                        </Grid>
 
-                        <Button x:Name="LoginButton" Content="Sign In" IsDefault="True" Click="LoginButton_Click" Style="{StaticResource PrimaryButton}"/>
+                        <!-- Action buttons -->
+                        <Grid Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="300"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Button Grid.Column="1"
+                                    x:Name="LoginButton"
+                                    Content="Login"
+                                    IsDefault="True"
+                                    Click="LoginButton_Click"
+                                    Style="{StaticResource PrimaryButton}"/>
+                            
+                        </Grid>
 
-                        <ProgressBar IsIndeterminate="True" Visibility="{Binding IsLoading, Converter={StaticResource BoolToVis}}" Height="2" Margin="0,10,0,0" Background="Transparent" Foreground="{StaticResource AccentBlue}"/>
+                        <!-- Loading bar -->
+                        <ProgressBar IsIndeterminate="True"
+                                     Visibility="{Binding IsLoading, Converter={StaticResource BoolToVis}}"
+                                     Height="2" Margin="0,6,0,0"
+                                     Background="Transparent"
+                                     Foreground="{StaticResource AccentBlue}"/>
+
                     </StackPanel>
-                </Border>
-            </Grid>
+                </Grid>
+            </Border>
+
+            <!-- ═══════════════════════════════════════════════
+                 RIGHT PANEL — Illustration / image
+                 Place your image at: Assets/login_illustration.png
+            ═══════════════════════════════════════════════ -->
+            <Border Grid.Column="1" ClipToBounds="True">
+                <Border.Background>
+                    <!-- Soft blue-lavender fallback if image is missing -->
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                        <GradientStop Color="#EEF2FF" Offset="0"/>
+                        <GradientStop Color="#E0E7FF" Offset="1"/>
+                    </LinearGradientBrush>
+                </Border.Background>
+
+                <Grid>
+                    <!-- Background image — stretches to fill the panel -->
+                    <Image Source="/Assets/login_illustration.jpg"
+                           Stretch="UniformToFill"
+                           HorizontalAlignment="Left"
+                           VerticalAlignment="Center" Margin="-50,0,0,0" Height="580" Width="560"/>
+
+                    <!-- Close button floated top-right over the image -->
+                    <Button x:Name="CloseButton"
+                            Content="✕"
+                            Style="{StaticResource TitleBarButton}"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Top"
+                            Margin="0,6,10,0"
+                            Click="CloseButton_Click"/>
+                </Grid>
+            </Border>
         </Grid>
     </Border>
 </Window>

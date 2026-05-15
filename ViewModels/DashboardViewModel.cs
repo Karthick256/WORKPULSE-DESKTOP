@@ -10,6 +10,7 @@ namespace monitor_desktop.ViewModels
         private string _welcomeMessage;
         private string _currentTime;
         private string _username;
+        private string _userInitials;
         private string _userRoles;
         private bool _isAdmin;
         private System.Timers.Timer _timer;
@@ -29,7 +30,19 @@ namespace monitor_desktop.ViewModels
         public string Username
         {
             get => _username;
-            set { _username = value; OnPropertyChanged(); }
+            set
+            {
+                _username = value;
+                OnPropertyChanged();
+                // Auto-derive initials whenever Username changes
+                UserInitials = BuildInitials(value);
+            }
+        }
+
+        public string UserInitials
+        {
+            get => _userInitials;
+            set { _userInitials = value; OnPropertyChanged(); }
         }
 
         public string UserRoles
@@ -60,20 +73,36 @@ namespace monitor_desktop.ViewModels
             var token = _tokenManager.CurrentToken;
             if (token != null)
             {
-                Username = "Employee";
+                Username = "Employee";   // Replace with real name from token when available
                 UserRoles = string.Join(", ", token.Roles ?? new System.Collections.Generic.List<string>());
                 IsAdmin = token.IsAdmin;
                 WelcomeMessage = $"Welcome back!";
             }
             else
             {
+                Username = "Guest";
                 WelcomeMessage = "Welcome!";
             }
         }
 
+        /// <summary>
+        /// Builds up to 2 uppercase initials from a display name.
+        /// "John Doe" → "JD",  "Employee" → "E",  null/empty → "?"
+        /// </summary>
+        private static string BuildInitials(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name)) return "?";
+
+            var parts = name.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length == 1)
+                return parts[0][0].ToString().ToUpper();
+
+            return $"{parts[0][0]}{parts[^1][0]}".ToUpper();
+        }
+
         private void UpdateTime()
         {
-            CurrentTime = DateTime.Now.ToString("dddd, MMMM dd, yyyy HH:mm:ss");
+            CurrentTime = DateTime.Now.ToString("dddd, MMMM dd, yyyy  HH:mm:ss");
         }
 
         public void Logout()

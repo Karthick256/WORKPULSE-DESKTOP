@@ -12,50 +12,44 @@
         ResizeMode="CanResize">
 
     <Window.Resources>
-        <SolidColorBrush x:Key="PageBg" Color="#F5F7FA"/>
-        <SolidColorBrush x:Key="CardBg" Color="#FFFFFF"/>
-        <SolidColorBrush x:Key="AccentBlue" Color="#2563EB"/>
-        <SolidColorBrush x:Key="AccentBlueHov" Color="#1D4ED8"/>
-        <SolidColorBrush x:Key="TextDark" Color="#0F172A"/>
-        <SolidColorBrush x:Key="TextSub" Color="#64748B"/>
-        <SolidColorBrush x:Key="TextMuted" Color="#94A3B8"/>
-        <SolidColorBrush x:Key="InputBorder" Color="#E2E8F0"/>
-        <SolidColorBrush x:Key="ErrorRed" Color="#DC2626"/>
-        <SolidColorBrush x:Key="DividerColor" Color="#E2E8F0"/>
+        <!-- ── Palette ── -->
+        <SolidColorBrush x:Key="PageBg"        Color="#F5F7FA"/>
+        <SolidColorBrush x:Key="CardBg"        Color="#FFFFFF"/>
+        <SolidColorBrush x:Key="SideNavBg"     Color="#FFFFFF"/>
+        <SolidColorBrush x:Key="HeaderBg"      Color="#FFFFFF"/>
+        <SolidColorBrush x:Key="AccentBlue"    Color="#2563EB"/>
+        <SolidColorBrush x:Key="AccentBlueBg"  Color="#EFF6FF"/>
+        <SolidColorBrush x:Key="TextDark"      Color="#0F172A"/>
+        <SolidColorBrush x:Key="TextSub"       Color="#64748B"/>
+        <SolidColorBrush x:Key="TextMuted"     Color="#94A3B8"/>
+        <SolidColorBrush x:Key="Divider"       Color="#E2E8F0"/>
+        <SolidColorBrush x:Key="ErrorRed"      Color="#DC2626"/>
 
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
 
-        <Style x:Key="CardStyle" TargetType="Border">
-            <Setter Property="Background" Value="{StaticResource CardBg}"/>
-            <Setter Property="CornerRadius" Value="14"/>
-            <Setter Property="BorderBrush" Value="{StaticResource InputBorder}"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Effect">
-                <Setter.Value>
-                    <DropShadowEffect Color="#94A3B8" BlurRadius="20" ShadowDepth="0" Opacity="0.10"/>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <Style x:Key="LogoutButton" TargetType="Button">
-            <Setter Property="Foreground" Value="{StaticResource ErrorRed}"/>
-            <Setter Property="FontSize" Value="13"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="Padding" Value="16,8"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="BorderBrush" Value="#FECACA"/>
-            <Setter Property="Background" Value="#FEF2F2"/>
+        <!-- ── Nav Item (inactive) ── -->
+        <Style x:Key="NavItem" TargetType="Button">
+            <Setter Property="Background"      Value="Transparent"/>
+            <Setter Property="Foreground"      Value="{StaticResource TextSub}"/>
+            <Setter Property="FontSize"        Value="13"/>
+            <Setter Property="FontFamily"      Value="Segoe UI"/>
+            <Setter Property="FontWeight"      Value="Normal"/>
+            <Setter Property="Height"          Value="42"/>
+            <Setter Property="Cursor"          Value="Hand"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="8">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Margin="{TemplateBinding Padding}"/>
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                                CornerRadius="8" Margin="0,1,0,1">
+                            <ContentPresenter Margin="12,0,0,0"
+                                              HorizontalAlignment="Left"
+                                              VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#FEE2E2"/>
-                                <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource ErrorRed}"/>
+                                <Setter TargetName="Bd" Property="Background" Value="#F1F5F9"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -63,23 +57,41 @@
             </Setter>
         </Style>
 
-        <Style x:Key="WindowControlButton" TargetType="Button">
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
-            <Setter Property="FontSize" Value="12"/>
-            <Setter Property="Width" Value="30"/>
-            <Setter Property="Height" Value="30"/>
-            <Setter Property="Cursor" Value="Hand"/>
+        <!-- ── Nav Item (active / selected) ── -->
+        <Style x:Key="NavItemActive" TargetType="Button" BasedOn="{StaticResource NavItem}">
+            <Setter Property="Background"  Value="{StaticResource AccentBlueBg}"/>
+            <Setter Property="Foreground"  Value="{StaticResource AccentBlue}"/>
+            <Setter Property="FontWeight"  Value="SemiBold"/>
+        </Style>
+
+        <!-- ── Section label in nav ── -->
+        <Style x:Key="NavSectionLabel" TargetType="TextBlock">
+            <Setter Property="FontSize"     Value="10"/>
+            <Setter Property="FontWeight"   Value="Bold"/>
+            <Setter Property="Foreground"   Value="{StaticResource TextMuted}"/>
+            <Setter Property="FontFamily"   Value="Segoe UI"/>
+            <Setter Property="Margin"       Value="12,16,0,4"/>
+        </Style>
+
+        <!-- ── Header icon button ── -->
+        <Style x:Key="HeaderIconBtn" TargetType="Button">
+            <Setter Property="Background"      Value="Transparent"/>
+            <Setter Property="Foreground"      Value="{StaticResource TextSub}"/>
+            <Setter Property="Width"           Value="34"/>
+            <Setter Property="Height"          Value="34"/>
+            <Setter Property="Cursor"          Value="Hand"/>
             <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="FontSize"        Value="14"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bd" Background="Transparent" CornerRadius="6">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                                CornerRadius="8">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#E2E8F0"/>
+                                <Setter TargetName="Bd" Property="Background" Value="#F1F5F9"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -87,7 +99,13 @@
             </Setter>
         </Style>
 
-        <Style x:Key="CloseWindowButton" TargetType="Button" BasedOn="{StaticResource WindowControlButton}">
+        <!-- ── Window control buttons ── -->
+        <Style x:Key="WinCtrl" TargetType="Button" BasedOn="{StaticResource HeaderIconBtn}">
+            <Setter Property="Width"  Value="28"/>
+            <Setter Property="Height" Value="28"/>
+            <Setter Property="FontSize" Value="11"/>
+        </Style>
+        <Style x:Key="WinCtrlClose" TargetType="Button" BasedOn="{StaticResource WinCtrl}">
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
@@ -104,60 +122,378 @@
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <!-- ── Card style ── -->
+        <Style x:Key="Card" TargetType="Border">
+            <Setter Property="Background"      Value="{StaticResource CardBg}"/>
+            <Setter Property="CornerRadius"    Value="12"/>
+            <Setter Property="BorderBrush"     Value="{StaticResource Divider}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Effect">
+                <Setter.Value>
+                    <DropShadowEffect Color="#94A3B8" BlurRadius="18" ShadowDepth="0" Opacity="0.08"/>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ── Primary (Add Product style) button ── -->
+        <Style x:Key="PrimaryBtn" TargetType="Button">
+            <Setter Property="Foreground"      Value="White"/>
+            <Setter Property="FontSize"        Value="12"/>
+            <Setter Property="FontWeight"      Value="SemiBold"/>
+            <Setter Property="FontFamily"      Value="Segoe UI"/>
+            <Setter Property="Height"          Value="34"/>
+            <Setter Property="Padding"         Value="16,0"/>
+            <Setter Property="Cursor"          Value="Hand"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="{StaticResource AccentBlue}"
+                                CornerRadius="8">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              Margin="{TemplateBinding Padding}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#1D4ED8"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ── Outline button (Export style) ── -->
+        <Style x:Key="OutlineBtn" TargetType="Button">
+            <Setter Property="Foreground"      Value="{StaticResource TextSub}"/>
+            <Setter Property="FontSize"        Value="12"/>
+            <Setter Property="FontFamily"      Value="Segoe UI"/>
+            <Setter Property="Height"          Value="34"/>
+            <Setter Property="Padding"         Value="14,0"/>
+            <Setter Property="Cursor"          Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="White"
+                                BorderBrush="{StaticResource Divider}" BorderThickness="1"
+                                CornerRadius="8">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              Margin="{TemplateBinding Padding}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#F8FAFC"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ── Logout button ── -->
+        <Style x:Key="LogoutBtn" TargetType="Button" BasedOn="{StaticResource OutlineBtn}">
+            <Setter Property="Foreground"  Value="{StaticResource ErrorRed}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="#FEF2F2"
+                                BorderBrush="#FECACA" BorderThickness="1"
+                                CornerRadius="8">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              Margin="{TemplateBinding Padding}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#FEE2E2"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Window.Resources>
 
-    <Border>
-        <Border.Background>
-            <SolidColorBrush Color="#F5F7FA"/>
-        </Border.Background>
+    <!-- ══════════════════════════════════════════════════════════════
+         ROOT CARD with shadow
+    ══════════════════════════════════════════════════════════════ -->
+    <Border Background="{StaticResource PageBg}">
         <Border.Effect>
-            <DropShadowEffect Color="#94A3B8" BlurRadius="40" ShadowDepth="0" Opacity="0.25"/>
+            <DropShadowEffect Color="#94A3B8" BlurRadius="40" ShadowDepth="0" Opacity="0.22"/>
         </Border.Effect>
 
         <Grid>
-            <Grid.RowDefinitions>
-                <RowDefinition Height="52"/>
-                <RowDefinition Height="*"/>
-            </Grid.RowDefinitions>
+            <Grid.ColumnDefinitions>
+                <!-- Sidebar -->
+                <ColumnDefinition Width="168"/>
+                <!-- Main area -->
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
 
-            <Border Grid.Row="0" BorderBrush="{StaticResource DividerColor}" BorderThickness="0,0,0,1" MouseLeftButtonDown="TitleBar_MouseDown" Background="Transparent">
-                <Grid Margin="24,0,16,0">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
+            <!-- ══════════════════════════════════════════════════════
+                 LEFT SIDEBAR
+            ══════════════════════════════════════════════════════ -->
+            <Border Grid.Column="0"
+                    Background="{StaticResource SideNavBg}"
+                    BorderBrush="{StaticResource Divider}"
+                    BorderThickness="0,0,1,0">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <!-- Logo zone -->
+                        <RowDefinition Height="52"/>
+                        <!-- Nav items -->
+                        <RowDefinition Height="*"/>
+                        <!-- Bottom items -->
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
 
-                    <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                        <Button x:Name="MinimizeButton" Content="─" Style="{StaticResource WindowControlButton}" Click="MinimizeButton_Click" Margin="0,0,4,0"/>
-                        <Button x:Name="MaximizeButton" Content="□" Style="{StaticResource WindowControlButton}" Click="MaximizeButton_Click" Margin="0,0,4,0"/>
-                        <Button x:Name="CloseButton" Content="✕" Style="{StaticResource CloseWindowButton}" Click="CloseButton_Click"/>
-                    </StackPanel>
+                    <!-- Brand logo -->
+                    <Border Grid.Row="0"
+                            BorderBrush="{StaticResource Divider}"
+                            BorderThickness="0,0,0,1"
+                            MouseLeftButtonDown="TitleBar_MouseDown">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0,0,0">
+                            <!-- Collapse toggle (like the ‹ icon in reference) -->
+                            <Border Width="28" Height="28" CornerRadius="6"
+                                    Background="{StaticResource AccentBlueBg}"
+                                    Margin="0,0,8,0">
+                                <TextBlock Text="W" FontSize="14" FontWeight="Bold"
+                                           Foreground="{StaticResource AccentBlue}"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"
+                                           FontFamily="Segoe UI"/>
+                            </Border>
+                            <TextBlock Text="WorkPulse"
+                                       FontSize="14" FontWeight="Bold"
+                                       Foreground="{StaticResource TextDark}"
+                                       FontFamily="Segoe UI"
+                                       VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Border>
 
-                    <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="120,0,0,0">
-                        <TextBlock Text="WorkPulse" FontSize="15" FontWeight="Bold" Foreground="{StaticResource TextDark}" VerticalAlignment="Center"/>
-                    </StackPanel>
+                    <!-- Nav Items -->
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Hidden">
+                        <StackPanel Margin="8,8,8,0">
 
-                    <TextBlock Grid.Column="1" Text="{Binding CurrentTime}" FontSize="13" Foreground="{StaticResource TextSub}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            <TextBlock Text="MAIN MENU" Style="{StaticResource NavSectionLabel}"/>
 
-                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                        <Button Content="Check for Updates" Click="CheckForUpdates_Click"
-                                FontSize="12" Padding="12,6" Margin="0,0,10,0"
-                                Background="Transparent" BorderBrush="#E2E8F0" BorderThickness="1"
-                                Cursor="Hand" Foreground="{StaticResource TextSub}"/>
-                        <TextBlock Text="{Binding WelcomeMessage}" FontSize="13" Foreground="{StaticResource TextSub}" VerticalAlignment="Center" Margin="0,0,16,0"/>
-                        <Button Content="Logout" Click="Logout_Click" Style="{StaticResource LogoutButton}" Margin="0,0,10,0"/>
+                            <!-- Dashboard (active) -->
+                            <Button Style="{StaticResource NavItem}">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="&#xE80F;" FontFamily="Segoe MDL2 Assets"
+                                               FontSize="14" VerticalAlignment="Center"
+                                               Margin="0,0,10,0"/>
+                                    <TextBlock Text="Dashboard" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+
+                            <!-- Attendance -->
+                            <Button Style="{StaticResource NavItemActive}">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="&#xE787;" FontFamily="Segoe MDL2 Assets"
+                                               FontSize="14" VerticalAlignment="Center"
+                                               Margin="0,0,10,0"/>
+                                    <TextBlock Text="Attendance" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+
+                            <!-- Leave -->
+                            <Button Style="{StaticResource NavItem}">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="&#xE8AA;" FontFamily="Segoe MDL2 Assets"
+                                               FontSize="14" VerticalAlignment="Center"
+                                               Margin="0,0,10,0"/>
+                                    <TextBlock Text="Leave" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+
+                            <!-- Productivity Summary -->
+                            <Button Style="{StaticResource NavItem}">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="&#xE9D9;" FontFamily="Segoe MDL2 Assets"
+                                               FontSize="14" VerticalAlignment="Center"
+                                               Margin="0,0,10,0"/>
+                                    <TextBlock Text="Productivity" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <!-- Bottom: Settings + Help -->
+                    <StackPanel Grid.Row="2" Margin="8,0,8,12">
+                        <Rectangle Height="1" Fill="{StaticResource Divider}" Margin="4,0,4,8"/>
+
+                        <!-- Profile -->
+                        <Button Style="{StaticResource NavItem}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE77B;" FontFamily="Segoe MDL2 Assets"
+                                           FontSize="14" VerticalAlignment="Center"
+                                           Margin="0,0,10,0"/>
+                                <TextBlock Text="Profile" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+
+                        <!-- Settings -->
+                        <Button Style="{StaticResource NavItem}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE713;" FontFamily="Segoe MDL2 Assets"
+                                           FontSize="14" VerticalAlignment="Center"
+                                           Margin="0,0,10,0"/>
+                                <TextBlock Text="Settings" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+
+                        <!-- Help Center -->
+                        <Button Style="{StaticResource NavItem}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE897;" FontFamily="Segoe MDL2 Assets"
+                                           FontSize="14" VerticalAlignment="Center"
+                                           Margin="0,0,10,0"/>
+                                <TextBlock Text="Help Center" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
                     </StackPanel>
                 </Grid>
             </Border>
 
-            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Background="Transparent">
-                <StackPanel Margin="24,20,24,24">
-                    <Border Style="{StaticResource CardStyle}" Padding="0">
-                        <views:AttendanceView/>
+            <!-- ══════════════════════════════════════════════════════
+                 RIGHT AREA  (header + content)
+            ══════════════════════════════════════════════════════ -->
+            <Grid Grid.Column="1">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="52"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <!-- ── TOP HEADER ── -->
+                <Border Grid.Row="0"
+                        Background="{StaticResource HeaderBg}"
+                        BorderBrush="{StaticResource Divider}"
+                        BorderThickness="0,0,0,1"
+                        MouseLeftButtonDown="TitleBar_MouseDown">
+                    <Grid Margin="20,0,12,0">
+                        <Grid.ColumnDefinitions>
+                            <!-- Page title -->
+                            <ColumnDefinition Width="Auto"/>
+                            <!-- Spacer -->
+                            <ColumnDefinition Width="*"/>
+                            <!-- Right actions -->
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Page title (like "Order" in reference) -->
+                        <TextBlock Grid.Column="0"
+                                   Text="Dashboard"
+                                   FontSize="17" FontWeight="Bold"
+                                   Foreground="{StaticResource TextDark}"
+                                   FontFamily="Segoe UI"
+                                   VerticalAlignment="Center"/>
+
+                        <!-- Clock in center -->
+                        <TextBlock Grid.Column="1"
+                                   Text="{Binding CurrentTime}"
+                                   FontSize="12" Foreground="{StaticResource TextMuted}"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   FontFamily="Segoe UI"/>
+
+                        <!-- Right: icon actions + avatar + window controls -->
+                        <StackPanel Grid.Column="2" Orientation="Horizontal"
+                                    VerticalAlignment="Center" >
+
+                            <!-- Notification bell -->
+                            <Button Style="{StaticResource HeaderIconBtn}" Content="🔔"/>
+
+                            <!-- Avatar circle -->
+                            <Border Width="30" Height="30" CornerRadius="15"
+                                    Background="{StaticResource AccentBlueBg}"
+                                    Margin="4,0,10,0">
+                                <TextBlock Text="{Binding UserInitials}"
+                                           FontSize="12" FontWeight="SemiBold"
+                                           Foreground="{StaticResource AccentBlue}"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"
+                                           FontFamily="Segoe UI"/>
+                            </Border>
+
+                            <!-- More options -->
+                            <Button Style="{StaticResource HeaderIconBtn}" Content="···" Margin="0,0,6,0"/>
+
+                            <!-- Separator -->
+                            <Rectangle Width="1" Height="20" Fill="{StaticResource Divider}" Margin="0,0,6,0"/>
+
+                            <!-- Window controls -->
+                            <Button x:Name="MinimizeButton" Content="─"
+                                    Style="{StaticResource WinCtrl}"
+                                    Click="MinimizeButton_Click"/>
+                            <Button x:Name="MaximizeButton" Content="□"
+                                    Style="{StaticResource WinCtrl}"
+                                    Click="MaximizeButton_Click"/>
+                            <Button x:Name="CloseButton" Content="✕"
+                                    Style="{StaticResource WinCtrlClose}"
+                                    Click="CloseButton_Click"/>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <!-- ── SUB-HEADER (breadcrumb + action bar, like "Add New Order" row) ── -->
+                <Grid Grid.Row="1">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="54"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- Action bar -->
+                    <Border Grid.Row="0"
+                            Background="White"
+                            BorderBrush="{StaticResource Divider}"
+                            BorderThickness="0,0,0,1"
+                            Padding="20,0">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <!-- Breadcrumb / sub-title -->
+                            <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="←" FontSize="14" Foreground="{StaticResource TextMuted}"
+                                           VerticalAlignment="Center" Margin="0,0,8,0" Cursor="Hand"/>
+                                <TextBlock Text="{Binding WelcomeMessage}"
+                                           FontSize="14" FontWeight="SemiBold"
+                                           Foreground="{StaticResource TextDark}"
+                                           FontFamily="Segoe UI"
+                                           VerticalAlignment="Center"/>
+                            </StackPanel>
+
+                            <!-- Action buttons -->
+                            <StackPanel Grid.Column="1" Orientation="Horizontal"
+                                        VerticalAlignment="Center" >
+                                <Button Content="Check for Updates"
+                                        Style="{StaticResource OutlineBtn}"
+                                        Click="CheckForUpdates_Click"/>
+                                <Button Content="Logout"
+                                        Style="{StaticResource LogoutBtn}"
+                                        Click="Logout_Click"/>
+                            </StackPanel>
+                        </Grid>
                     </Border>
-                </StackPanel>
-            </ScrollViewer>
+
+                    <!-- ── MAIN CONTENT AREA ── -->
+                    <ScrollViewer Grid.Row="1"
+                                  VerticalScrollBarVisibility="Auto"
+                                  Background="{StaticResource PageBg}">
+                        <StackPanel Margin="20,20,20,20">
+                            <Border Style="{StaticResource Card}" Padding="0">
+                                <views:AttendanceView/>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
+
+            </Grid>
+            <!-- end right area -->
+
         </Grid>
     </Border>
 </Window>

@@ -54,11 +54,6 @@ namespace monitor_desktop.ViewModels
             _authService = new AuthService(apiClient);
             _tokenManager = tokenManager;
             _navigationService = new NavigationService();
-
-            if (_tokenManager.IsAuthenticated)
-            {
-                _navigationService.NavigateToDashboard();
-            }
         }
 
         public async Task<bool> LoginAsync()

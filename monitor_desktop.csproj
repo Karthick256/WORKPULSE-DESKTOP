@@ -29,6 +29,7 @@
     <PackageReference Include="Stomp.Net" Version="2.4.0" />
     <PackageReference Include="System.Drawing.Common" Version="10.0.7" />
     <PackageReference Include="WebSocketSharp" Version="1.0.3-rc11" />
+    <Resource Include="Assets\login_illustration.jpg" />
   </ItemGroup>
 
 </Project>
